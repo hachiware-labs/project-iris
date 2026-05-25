@@ -15,6 +15,9 @@
 | REQ-0008 | report を生成したら、進捗見通し、リスク、支援候補、よい進捗シグナル、次アクションを Markdown として出力する。 | UC-6 |
 | REQ-0009 | 人に関する分析を出力したら、個人評価ではなく支援判断として表現する。 | UC-4, UC-6 |
 | REQ-0010 | focus を表示したら、プロジェクトが今見るべき焦点を優先順で出力する。 | UC-7 |
+| REQ-0011 | WBS を Excel に export したら、provider_refs を保持したローカル WBS ビューを作成する。 | UC-8 |
+| REQ-0012 | sync preview を実行したら、Excel/WBS/provider 間の差分とリスクを表示する。 | UC-8, UC-9 |
+| REQ-0013 | sync apply を実行したら、承認済み差分だけを provider に反映する。 | UC-9 |
 
 ### [PIRIS-0001] 管理領域を初期化したら、Project Iris が読むローカル scaffold を作成する。
 Given：ユーザーが Project Iris を使いたい対象ディレクトリを持っている。
@@ -127,6 +130,40 @@ Done：最重要リスク、支援が必要な人または領域、次アクシ�
 | ERR-PIRIS-0020 | focus に必要な analysis が不足している | `iris analyze` または import を実行する | MSG-PIRIS-0020 |
 | ERR-PIRIS-0021 | 複数の焦点候補を順位づける根拠が不足している | 同順位または根拠不足として読む | MSG-PIRIS-0021 |
 
+### [PIRIS-0011] WBS を Excel に export したら、provider_refs を保持したローカル WBS ビューを作成する。
+Given：`.planwise/wbs.yaml` が存在し、tasks が検証可能である。
+When：ユーザーが `iris export excel --path wbs.xlsx` を実行する。
+Done：Task の主要項目と provider_refs を含む Excel WBS が指定パスに作成または更新される。
+
+#### エラー分岐（REQ-0011の枝番）
+| ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
+|---|---|---|---|
+| ERR-PIRIS-0022 | WBS が存在しない、または検証に失敗する | `iris init` または `iris validate` を実行する | MSG-PIRIS-0022 |
+| ERR-PIRIS-0023 | 出力先 Excel を安全に書き込めない | path、権限、既存ファイルを確認する | MSG-PIRIS-0023 |
+
+### [PIRIS-0012] sync preview を実行したら、Excel/WBS/provider 間の差分とリスクを表示する。
+Given：provider_refs つき WBS と、対象 provider または Excel WBS が存在する。
+When：ユーザーが `iris sync preview` を実行する。
+Done：追加、更新、削除、競合、破壊的変更候補が SyncDiff として表示され、apply 前に確認できる。
+
+#### エラー分岐（REQ-0012の枝番）
+| ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
+|---|---|---|---|
+| ERR-PIRIS-0024 | provider_refs が不足して対応関係を判断できない | import/export をやり直すか対応 ID を補う | MSG-PIRIS-0024 |
+| ERR-PIRIS-0025 | remote provider と local Excel の両方が変更され競合している | どちらを採用するか明示する | MSG-PIRIS-0025 |
+
+### [PIRIS-0013] sync apply を実行したら、承認済み差分だけを provider に反映する。
+Given：sync preview の結果があり、ユーザーが反映対象の差分を承認している。
+When：ユーザーが `iris sync apply` を実行する。
+Done：承認済み差分だけが provider に書き戻され、反映結果が WBS と provider_refs に保存される。
+
+#### エラー分岐（REQ-0013の枝番）
+| ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
+|---|---|---|---|
+| ERR-PIRIS-0026 | preview なしに apply しようとしている | `iris sync preview` を先に実行する | MSG-PIRIS-0026 |
+| ERR-PIRIS-0027 | provider への書き込み権限がない | token と権限を確認する | MSG-PIRIS-0027 |
+| ERR-PIRIS-0028 | apply 中に remote が更新され、preview との差分が古くなった | preview を再実行する | MSG-PIRIS-0028 |
+
 ## メッセージID管理（MSG-xxxx）
 | ID | 文面テンプレ | 出力先 | 発生条件 | 関連REQ/ERR |
 |---|---|---|---|---|
@@ -151,6 +188,13 @@ Done：最重要リスク、支援が必要な人または領域、次アクシ�
 | MSG-PIRIS-0019 | `People findings must be phrased as support recommendations.` | stderr | 表現ポリシー違反 | REQ-0009 / ERR-PIRIS-0019 |
 | MSG-PIRIS-0020 | `Focus unavailable: analysis data is missing.` | stderr | focus 材料不足 | REQ-0010 / ERR-PIRIS-0020 |
 | MSG-PIRIS-0021 | `Focus ranking is limited because evidence is insufficient.` | stdout | focus 順位根拠不足 | REQ-0010 / ERR-PIRIS-0021 |
+| MSG-PIRIS-0022 | `Excel export failed: WBS is missing or invalid.` | stderr | export 前提不成立 | REQ-0011 / ERR-PIRIS-0022 |
+| MSG-PIRIS-0023 | `Excel export failed: cannot write {path}.` | stderr | Excel 書き込み失敗 | REQ-0011 / ERR-PIRIS-0023 |
+| MSG-PIRIS-0024 | `Sync preview cannot match tasks because provider_refs are missing.` | stderr | 対応関係不足 | REQ-0012 / ERR-PIRIS-0024 |
+| MSG-PIRIS-0025 | `Sync preview found conflicts that require a decision.` | stdout | 同時変更競合 | REQ-0012 / ERR-PIRIS-0025 |
+| MSG-PIRIS-0026 | `Sync apply requires a preview result.` | stderr | preview 不足 | REQ-0013 / ERR-PIRIS-0026 |
+| MSG-PIRIS-0027 | `Sync apply failed: provider write permission is missing.` | stderr | provider 書込権限不足 | REQ-0013 / ERR-PIRIS-0027 |
+| MSG-PIRIS-0028 | `Sync apply stopped: remote data changed after preview.` | stderr | preview stale | REQ-0013 / ERR-PIRIS-0028 |
 
 ## エラーID管理（ERR-xxxx）
 | ID | 原因 | 検出条件 | ユーザーアクション | 再試行可否 | 関連MSG-ID | 関連REQ |
@@ -176,3 +220,10 @@ Done：最重要リスク、支援が必要な人または領域、次アクシ�
 | ERR-PIRIS-0019 | 表現ポリシー違反 | 個人評価・ランキング表現が出る | support/attention 表現へ修正する | 可 | MSG-PIRIS-0019 | REQ-0009 |
 | ERR-PIRIS-0020 | focus 材料不足 | analysis がない、または WBS が不足する | import/analyze を実行する | 可 | MSG-PIRIS-0020 | REQ-0010 |
 | ERR-PIRIS-0021 | focus 順位根拠不足 | finding の severity や evidence が不足する | 同順位または根拠不足として読む | 可 | MSG-PIRIS-0021 | REQ-0010 |
+| ERR-PIRIS-0022 | Excel export 前提不成立 | WBS がない、または validate に失敗する | WBS を作成または修正する | 可 | MSG-PIRIS-0022 | REQ-0011 |
+| ERR-PIRIS-0023 | Excel 書き込み失敗 | path に書き込めない | path と権限を確認する | 可 | MSG-PIRIS-0023 | REQ-0011 |
+| ERR-PIRIS-0024 | sync 対応関係不足 | provider_refs がない、または曖昧 | import/export をやり直す | 可 | MSG-PIRIS-0024 | REQ-0012 |
+| ERR-PIRIS-0025 | sync 競合 | local と remote の両方が変更されている | 採用側を明示する | 可 | MSG-PIRIS-0025 | REQ-0012 |
+| ERR-PIRIS-0026 | preview 不足 | apply 対象の preview がない | preview を先に実行する | 可 | MSG-PIRIS-0026 | REQ-0013 |
+| ERR-PIRIS-0027 | provider 書込権限不足 | write API が権限エラーを返す | token と権限を確認する | 可 | MSG-PIRIS-0027 | REQ-0013 |
+| ERR-PIRIS-0028 | preview stale | preview 後に remote が更新された | preview を再実行する | 可 | MSG-PIRIS-0028 | REQ-0013 |

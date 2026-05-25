@@ -2,9 +2,9 @@
 #1.概要（Overview）（先頭固定）
 - 作るもの（What）：Project Iris は、GitHub Issues、Excel WBS、将来の各種プロジェクト管理ツールからプロジェクト情報を取り込み、現在地・進捗見通し・詰まり・支援が必要な箇所に焦点を合わせるローカルファースト CLI である。
 - 解決すること（Why）：プロジェクト情報が複数ツールに分散すると、進捗が間に合いそうか、誰に負荷や判断が集中しているか、どのタスクを助けると前に進むかが見えにくくなる。Project Iris は分散した作業シグナルを共通 WBS に寄せ、プロジェクトが今見るべき焦点を事実ベースで示す。
-- できること（主要機能の要約）：ローカル `.planwise` 初期化、WBS 読み書き、GitHub Issues 取り込み、Excel WBS 取り込み、現在状態の集計、将来の分析・スナップショット・バーンダウン・焦点提示・支援判断レポート生成。
+- できること（主要機能の要約）：ローカル `.planwise` 初期化、WBS 読み書き、GitHub Issues 取り込み、Excel WBS 取り込み、GitHub と Excel の同期支援、現在状態の集計、将来の分析・スナップショット・バーンダウン・焦点提示・支援判断レポート生成。
 - 使いどころ（When/Where）：複数ツールでタスク管理している個人・小規模チーム・プロジェクトリードが、週次レビュー、リリース前確認、支援依頼、AI エージェントへの状況共有を行う場面で使う。
-- 成果物（Outputs）：`.planwise/wbs.yaml`、provider_refs つきタスク、status/analyze/burndown/report の CLI 出力、Markdown レポート、将来の snapshot 履歴。
+- 成果物（Outputs）：`.planwise/wbs.yaml`、provider_refs つきタスク、Excel WBS ファイル、同期差分、status/analyze/burndown/report の CLI 出力、Markdown レポート、将来の snapshot 履歴。
 - 前提（Assumptions）：初期版は Node.js 18+ のローカル CLI とし、データはユーザーの作業ディレクトリ内に保存する。GitHub Issue の標準開始日は存在しないため、開始日は GitHub Projects や外部シート由来の provider-specific データとして扱う。個人の人事評価ではなく、支援判断とプロジェクト前進を目的にする。
 
 #2.ユーザーの困りごと（Pain）
@@ -15,6 +15,7 @@
 - P-5: AI にプロジェクト状況を読ませたいが、入力データの根拠・権限・公開範囲が曖昧だと信頼しにくい。
 - P-6: 「よくやっている」「助けてほしい」を伝えたいが、個人評価や責任追及に見える表現は避けたい。
 - P-7: 情報は多いが、プロジェクトが今どこに焦点を合わせるべきかを一言で説明できない。
+- P-8: SaaS 上の Issue を一覧・レビュー・編集するとき、ローカル Excel の WBS として見たいが、手作業転記では差分や上書きが怖い。
 
 #3.ターゲットと前提環境（詳細）
 - 主対象：プロジェクトリード、PM、開発リード、個人開発者、AI エージェントを使って進行管理する利用者。
@@ -25,6 +26,7 @@
 - 公開範囲：CLI 出力と Markdown レポートはユーザーが明示的に共有する成果物であり、自動公開しない。
 - 例外方針：provider 取得失敗、権限不足、Excel カラム不足、WBS 不整合、履歴不足は、分析を捏造せず「判断不能」または「データ不足」として扱う。
 - プロダクト軸：Iris は Integrated Reporting & Insight System の意味を持つ。情報を集めるだけでなく、レンズのように焦点を合わせ、見るべきリスク・支援先・よい進捗シグナルを選び出す。
+- 同期方針：Project Iris は外部 SaaS の正本を置き換えない。GitHub などの System of Record を読み、ローカル Excel WBS を見やすい作業ビューとして生成・更新する。SaaS へ書き戻す場合は差分 preview と明示的な apply を必須にする。
 
 #4.採用する技術スタック（採用理由つき）
 - Node.js CLI：GitHub API、ローカルファイル、npm 配布との相性がよく、既存実装も CommonJS ベースで小さく保てる。
@@ -48,6 +50,9 @@
 | F-9 | provider 差分・同期リスク検出 | P-1, P-5 | UC-4 |
 | F-10 | Focus View による「今見るべきこと」の提示 | P-2, P-3, P-7 | UC-7 |
 | F-11 | Positive Signals の抽出 | P-6, P-7 | UC-6 |
+| F-12 | WBS の Excel export | P-1, P-8 | UC-8 |
+| F-13 | Excel と provider の同期差分 preview | P-5, P-8 | UC-8 |
+| F-14 | 承認済み差分の provider 書き戻し | P-1, P-8 | UC-9 |
 
 #6.ユースケース（Use Cases）
 | ID | 主体 | 目的 | 前提 | 主要手順（最小操作） | 成功条件 | 例外/制約 |
@@ -59,6 +64,8 @@
 | UC-5 | プロジェクトリード | 進捗推移とバーンダウンを見る | 複数日の snapshot がある | `iris snapshot` を継続実行し、`iris burndown` を実行する | 残タスク推移、burn rate、必要 burn rate、見通しが表示される | 履歴不足の場合は予測せず、snapshot 取得を促す |
 | UC-6 | プロジェクトリード | 週次・リリース前の支援判断レポートを作る | status/analyze/burndown の材料がある | `iris report --format markdown` を実行する | 間に合いそうか、主リスク、助けるべき人・タスク、よい進捗シグナル、次アクションが Markdown で出る | 個人評価ランキングや責任追及表現は出さない |
 | UC-7 | プロジェクトリード | 今どこに焦点を合わせるべきかを知る | WBS と分析結果がある | `iris focus` または `iris report` を実行する | 最重要リスク、支援先、次アクション、よい進捗シグナルが短く優先順で出る | データ不足や履歴不足がある場合は根拠不足として明示する |
+| UC-8 | プロジェクトリード | SaaS の Issue をローカル Excel WBS として確認する | GitHub などから WBS へ import 済み | `iris export excel --path wbs.xlsx` を実行し、必要に応じて `iris sync preview` を実行する | provider_refs を保った Excel WBS と、Excel/provider 間の差分が生成される | Excel の手編集は preview で差分確認してから扱う |
+| UC-9 | プロジェクトリード | Excel で整理した変更を GitHub などへ安全に反映する | Excel WBS と provider_refs がある | `iris sync preview` で差分を確認し、`iris sync apply` を実行する | 承認済み差分だけが provider に反映され、結果が WBS に同期される | 破壊的変更、競合、権限不足は apply せず停止する |
 
 #7.Goals（Goalのみ／ユースケース紐づけ必須）
 - G-1: 分散したプロジェクト情報をローカル WBS として統合できる。（対応：UC-1, UC-2）
@@ -67,6 +74,8 @@
 - G-4: 進捗推移と間に合いそうかを履歴から判断できる。（対応：UC-5）
 - G-5: 人を責めず、支援と次アクションに向いたレポートを作れる。（対応：UC-6）
 - G-6: 分散情報から「今見るべき焦点」を短く説明できる。（対応：UC-7）
+- G-7: SaaS 上の作業情報をローカル Excel WBS として見られる。（対応：UC-8）
+- G-8: Excel で整理した変更を差分確認後に安全に provider へ反映できる。（対応：UC-9）
 
 #8.基本レイヤー構造（Layering）
 | レイヤー | 役割 | 主な処理/データ流れ |
@@ -78,6 +87,7 @@
 | History 層 | 進捗履歴管理 | snapshot を保存し、burndown に必要な時系列データを提供する |
 | Reporting 層 | 支援判断レポート生成 | finding と履歴を Markdown/CLI 出力に整形し、支援候補と次アクションを提示する |
 | Focus 層 | 優先焦点の選定 | analysis、history、positive signal を統合し、今見るべき上位項目を選ぶ |
+| Sync 層 | provider とローカル WBS/Excel の差分管理 | provider_refs を使って差分を検出し、preview と明示 apply に分けて反映する |
 
 #9.主要データクラス（Key Data Classes / Entities）
 | データクラス | 主要属性（不要属性なし） | 用途（対応UC/Feature） |
@@ -90,6 +100,8 @@
 | Burndown | scope, start_date, latest_date, remaining_series, burn_rate, required_burn_rate, outlook | UC-5, UC-6 / F-7, F-8 |
 | Report | generated_at, scope, executive_summary, delivery_outlook, key_risks, people_attention, positive_signals, suggested_actions | UC-6 / F-8 |
 | FocusItem | rank, category, title, reason, evidence, suggested_action, related_tasks, related_people | UC-7 / F-10, F-11 |
+| SyncDiff | id, provider, direction, field, local_value, remote_value, risk, action | UC-8, UC-9 / F-13, F-14 |
+| ExcelWorkbook | path, sheet, columns, task_rows, generated_at | UC-8, UC-9 / F-12, F-13 |
 
 #10.機能部品の実装順序（Implementation Order）
 1. 既存の `init/list/show/validate/import/status` を維持し、WBS 正本と provider_refs の互換性を固める。
@@ -98,8 +110,11 @@
 4. `iris burndown` を実装し、snapshot 履歴から残タスク推移、burn rate、必要 burn rate、見通しを出す。
 5. `iris report --format markdown` を実装し、分析結果とバーンダウンを支援判断レポートにまとめる。
 6. `iris focus` を実装し、最重要リスク、支援先、次アクション、Positive Signals を短い優先リストとして提示する。
-7. GitHub Projects や Issue events から開始日、更新履歴、意思決定シグナルを取り込む。
-8. `iris report --ai` を追加し、ルールベースの事実を自然文に整える。ただし事実検出は deterministic な分析結果を根拠にする。
+7. `iris export excel` を実装し、provider_refs つき WBS をローカル Excel WBS として生成する。
+8. `iris sync preview` を実装し、Excel/WBS/provider の差分とリスクを表示する。
+9. `iris sync apply` を実装し、承認済み差分だけを provider に書き戻す。
+10. GitHub Projects や Issue events から開始日、更新履歴、意思決定シグナルを取り込む。
+11. `iris report --ai` を追加し、ルールベースの事実を自然文に整える。ただし事実検出は deterministic な分析結果を根拠にする。
 
 #11.用語集（Glossary）
 - Project Iris：複数ツールからプロジェクトの今を見える形にし、見るべき焦点を合わせる CLI。Iris は Integrated Reporting & Insight System の意味を持つ。
@@ -113,3 +128,6 @@
 - Delivery Outlook：現在の残作業、履歴、リスクから見た間に合いそうかの見通し。
 - Positive Signal：完了、ブロッカー解消、acceptance 明確化など、プロジェクト前進への貢献を示す事実。
 - Focus：プロジェクトが今見るべき最重要リスク、支援先、よい進捗シグナル、次アクションを短く優先順で示す考え方。
+- Local WBS View：SaaS 上の Issue や外部 provider のタスクを、ローカル Excel WBS として確認・編集しやすくしたビュー。
+- Sync Preview：Excel/WBS/provider の差分を apply 前に表示し、破壊的変更や競合を避けるための確認結果。
+- Sync Apply：preview で確認済みの差分だけを provider へ反映する操作。

@@ -14,6 +14,7 @@
 | REQ-0007 | burndown を表示したら、snapshot 履歴から残作業推移と見通しを表示する。 | UC-5 |
 | REQ-0008 | report を生成したら、進捗見通し、リスク、支援候補、よい進捗シグナル、次アクションを Markdown として出力する。 | UC-6 |
 | REQ-0009 | 人に関する分析を出力したら、個人評価ではなく支援判断として表現する。 | UC-4, UC-6 |
+| REQ-0010 | focus を表示したら、プロジェクトが今見るべき焦点を優先順で出力する。 | UC-7 |
 
 ### [PIRIS-0001] 管理領域を初期化したら、Project Iris が読むローカル scaffold を作成する。
 Given：ユーザーが Project Iris を使いたい対象ディレクトリを持っている。
@@ -115,6 +116,17 @@ Done：出力は「誰を助けるとプロジェクトが前に進むか」「�
 | ERR-PIRIS-0018 | 個人に関する根拠データが不足している | person finding をデータ不足として扱う | MSG-PIRIS-0018 |
 | ERR-PIRIS-0019 | 出力が評価・ランキングに見える | 表現を support/attention/recommendation に修正する | MSG-PIRIS-0019 |
 
+### [PIRIS-0010] focus を表示したら、プロジェクトが今見るべき焦点を優先順で出力する。
+Given：WBS、status、analysis、必要に応じて snapshot/burndown の材料がある。
+When：ユーザーが `iris focus` を実行する。
+Done：最重要リスク、支援が必要な人または領域、次アクション、Positive Signals が根拠つきで優先順に表示される。
+
+#### エラー分岐（REQ-0010の枝番）
+| ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
+|---|---|---|---|
+| ERR-PIRIS-0020 | focus に必要な analysis が不足している | `iris analyze` または import を実行する | MSG-PIRIS-0020 |
+| ERR-PIRIS-0021 | 複数の焦点候補を順位づける根拠が不足している | 同順位または根拠不足として読む | MSG-PIRIS-0021 |
+
 ## メッセージID管理（MSG-xxxx）
 | ID | 文面テンプレ | 出力先 | 発生条件 | 関連REQ/ERR |
 |---|---|---|---|---|
@@ -137,6 +149,8 @@ Done：出力は「誰を助けるとプロジェクトが前に進むか」「�
 | MSG-PIRIS-0017 | `Delivery outlook unavailable: burndown history is insufficient.` | stdout | burndown 履歴不足 | REQ-0008 / ERR-PIRIS-0017 |
 | MSG-PIRIS-0018 | `People attention is limited because person data is missing.` | stdout | 人に関する根拠不足 | REQ-0009 / ERR-PIRIS-0018 |
 | MSG-PIRIS-0019 | `People findings must be phrased as support recommendations.` | stderr | 表現ポリシー違反 | REQ-0009 / ERR-PIRIS-0019 |
+| MSG-PIRIS-0020 | `Focus unavailable: analysis data is missing.` | stderr | focus 材料不足 | REQ-0010 / ERR-PIRIS-0020 |
+| MSG-PIRIS-0021 | `Focus ranking is limited because evidence is insufficient.` | stdout | focus 順位根拠不足 | REQ-0010 / ERR-PIRIS-0021 |
 
 ## エラーID管理（ERR-xxxx）
 | ID | 原因 | 検出条件 | ユーザーアクション | 再試行可否 | 関連MSG-ID | 関連REQ |
@@ -160,3 +174,5 @@ Done：出力は「誰を助けるとプロジェクトが前に進むか」「�
 | ERR-PIRIS-0017 | delivery outlook 不足 | burndown 履歴が足りない | 履歴不足として読むか snapshot を蓄積する | 可 | MSG-PIRIS-0017 | REQ-0008 |
 | ERR-PIRIS-0018 | person data 不足 | owner/assignee/comment/event が不足する | finding の根拠不足を受け入れる | 可 | MSG-PIRIS-0018 | REQ-0009 |
 | ERR-PIRIS-0019 | 表現ポリシー違反 | 個人評価・ランキング表現が出る | support/attention 表現へ修正する | 可 | MSG-PIRIS-0019 | REQ-0009 |
+| ERR-PIRIS-0020 | focus 材料不足 | analysis がない、または WBS が不足する | import/analyze を実行する | 可 | MSG-PIRIS-0020 | REQ-0010 |
+| ERR-PIRIS-0021 | focus 順位根拠不足 | finding の severity や evidence が不足する | 同順位または根拠不足として読む | 可 | MSG-PIRIS-0021 | REQ-0010 |

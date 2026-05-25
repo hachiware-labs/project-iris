@@ -31,6 +31,22 @@ function loadWbs(outputDir = process.cwd()) {
   };
 }
 
+function saveWbs(wbs, outputDir = process.cwd()) {
+  const errors = validateWbs(wbs);
+  if (errors.length > 0) {
+    throw new Error(`Cannot save invalid WBS:\n${errors.map((error) => `- ${error}`).join("\n")}`);
+  }
+
+  fs.writeFileSync(
+    wbsPathFor(outputDir),
+    `${YAML.stringify({
+      version: wbs.version,
+      tasks: wbs.tasks
+    }).trimEnd()}\n`,
+    "utf8"
+  );
+}
+
 function validateWbs(wbs) {
   const errors = [];
 
@@ -232,6 +248,7 @@ module.exports = {
   formatTaskDetails,
   formatTaskList,
   loadWbs,
+  saveWbs,
   validateWbs,
   wbsPathFor
 };

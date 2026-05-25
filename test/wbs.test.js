@@ -5,6 +5,8 @@ const path = require("node:path");
 const test = require("node:test");
 
 const { main, parseOutputDirArgs, parseReadArgs } = require("../src/cli");
+const { rowsToTasks } = require("../src/importers/excel");
+const { issueToTask } = require("../src/importers/github");
 const packageJson = require("../package.json");
 const {
   filterTasks,
@@ -34,6 +36,25 @@ function withCapturedConsole(callback) {
   try {
     return {
       result: callback(),
+      output
+    };
+  } finally {
+    console.log = originalLog;
+    console.error = originalError;
+  }
+}
+
+async function withCapturedConsoleAsync(callback) {
+  const originalLog = console.log;
+  const originalError = console.error;
+  const output = [];
+
+  console.log = (message = "") => output.push(String(message));
+  console.error = (message = "") => output.push(String(message));
+
+  try {
+    return {
+      result: await callback(),
       output
     };
   } finally {
@@ -100,8 +121,8 @@ test("parseOutputDirArgs only accepts output-dir", () => {
   assert.throws(() => parseOutputDirArgs(["--status", "todo"]), /Unknown option/);
 });
 
-test("main prints package version", () => {
-  const version = withCapturedConsole(() => main(["--version"]));
+test("main prints package version", async () => {
+  const version = await withCapturedConsoleAsync(() => main(["--version"]));
 
   assert.equal(version.result, 0);
   assert.equal(version.output.join("\n"), packageJson.version);
@@ -213,11 +234,11 @@ test("validateWbs detects dependency cycles", () => {
   assert.match(errors.join("\n"), /dependency cycle detected: T-C -> T-D -> T-E -> T-C/);
 });
 
-test("main supports list and show with output-dir", () => {
+test("main supports list and show with output-dir", async () => {
   const root = makePlanwiseDir(sampleWbs);
 
-  const list = withCapturedConsole(() => main(["list", "--output-dir", root, "--status", "todo"]));
-  const show = withCapturedConsole(() => main(["show", "T-001", "--output-dir", root]));
+  const list = await withCapturedConsoleAsync(() => main(["list", "--output-dir", root, "--status", "todo"]));
+  const show = await withCapturedConsoleAsync(() => main(["show", "T-001", "--output-dir", root]));
 
   assert.equal(list.result, 0);
   assert.match(list.output.join("\n"), /T-001 \[todo high\] @agent Implement list/);
@@ -225,11 +246,58 @@ test("main supports list and show with output-dir", () => {
   assert.match(show.output.join("\n"), /T-001: Implement list/);
 });
 
-test("main supports validate with output-dir", () => {
+test("main supports validate with output-dir", async () => {
   const root = makePlanwiseDir(sampleWbs);
 
-  const validate = withCapturedConsole(() => main(["validate", "--output-dir", root]));
+  const validate = await withCapturedConsoleAsync(() => main(["validate", "--output-dir", root]));
 
   assert.equal(validate.result, 0);
   assert.match(validate.output.join("\n"), /WBS is valid\. 2 task\(s\)\./);
+});
+
+test("issueToTask maps GitHub issues to WBS tasks", () => {
+  const task = issueToTask({
+    number: 12,
+    title: "Connect GitHub import",
+    body: "Import open issues",
+    state: "open",
+    labels: [{ name: "priority:high" }, { name: "blocked" }],
+    assignees: [{ login: "kitfactory" }],
+    milestone: { title: "M-001" },
+    html_url: "https://github.com/hachiware-labs/project-iris/issues/12",
+    created_at: "2026-05-25T00:00:00Z",
+    updated_at: "2026-05-25T01:00:00Z"
+  }, "hachiware-labs/project-iris");
+
+  assert.equal(task.id, "GH-12");
+  assert.equal(task.status, "blocked");
+  assert.equal(task.priority, "high");
+  assert.equal(task.owner, "kitfactory");
+  assert.equal(task.milestone, "M-001");
+  assert.equal(task.provider_refs[0].provider, "github");
+});
+
+test("rowsToTasks maps Excel rows to WBS tasks", () => {
+  const tasks = rowsToTasks([
+    ["ID", "Title", "Status", "Priority", "Owner", "Labels", "Depends On", "Acceptance"],
+    ["T-010", "Import spreadsheet", "todo", "medium", "ops", "excel, import", "T-001; T-002", "Rows become tasks\nIDs are preserved"]
+  ], "C:\\tmp\\wbs.xlsx");
+
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].id, "T-010");
+  assert.equal(tasks[0].title, "Import spreadsheet");
+  assert.deepEqual(tasks[0].labels, ["excel", "import"]);
+  assert.deepEqual(tasks[0].depends_on, ["T-001", "T-002"]);
+  assert.deepEqual(tasks[0].acceptance, ["Rows become tasks", "IDs are preserved"]);
+});
+
+test("main supports status with output-dir", async () => {
+  const root = makePlanwiseDir(sampleWbs);
+
+  const status = await withCapturedConsoleAsync(() => main(["status", "--output-dir", root]));
+
+  assert.equal(status.result, 0);
+  assert.match(status.output.join("\n"), /Tasks: 2/);
+  assert.match(status.output.join("\n"), /todo=1/);
+  assert.match(status.output.join("\n"), /done=1/);
 });

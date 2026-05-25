@@ -111,6 +111,24 @@ Example output:
 T-001 [todo high] @release Verify release smoke path
 ```
 
+## Import Tasks
+
+Import open GitHub Issues into `.planwise/wbs.yaml`:
+
+```sh
+iris import github --repo hachiware-labs/project-iris
+```
+
+Read private repositories by setting `GITHUB_TOKEN` before running the command. GitHub Issues do not have a native start date field; Project Iris preserves Issue timestamps such as `created_at`, `updated_at`, and `closed_at` in `provider_refs`. Start dates should come from GitHub Projects or organization issue fields in a later provider-specific import.
+
+Import an Excel WBS:
+
+```sh
+iris import excel --path ./wbs.xlsx
+```
+
+The Excel importer reads the first row as headers. Supported columns include `id`, `title`, `status`, `priority`, `owner`, `labels`, `milestone`, `depends_on`, `acceptance`, `description`, and `risks`. List fields can be separated by commas, semicolons, or new lines.
+
 ## Show One Task
 
 Show full details for one task ID:
@@ -135,6 +153,16 @@ iris validate --output-dir ./example-project
 ```
 
 Validation checks that `version` is `1`, `tasks` is an array, each task has a non-empty `id` and `title`, common scalar fields are strings, common list fields are arrays, task IDs are unique, and `depends_on` entries reference existing tasks without cycles.
+
+## Project Status
+
+Summarize the current local WBS:
+
+```sh
+iris status
+```
+
+The summary includes task counts by status, owner counts, blocked tasks, and open urgent/high-priority tasks.
 
 Example invalid `wbs.yaml`:
 

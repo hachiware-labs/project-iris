@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
 const { initPlanwise } = require("./init");
+const { importExcelTasks, parseExcelImportArgs } = require("./importers/excel");
+const { importGitHubIssues, parseGitHubImportArgs } = require("./importers/github");
 const packageJson = require("../package.json");
+const { formatStatusSummary, loadStatusSummary } = require("./status");
 const {
   filterTasks,
   findTask,
@@ -14,14 +17,19 @@ function printHelp() {
   console.log(`Usage:
   iris --version
   iris init [--output-dir <dir>] [--force]
+  iris import github --repo <owner/name> [--state open|closed|all] [--limit <n>] [--output-dir <dir>]
+  iris import excel --path <file.xlsx> [--sheet <name-or-number>] [--output-dir <dir>]
   iris list [--status <status>] [--owner <owner>] [--milestone <id>] [--label <label>] [--output-dir <dir>]
   iris show <task-id> [--output-dir <dir>]
+  iris status [--output-dir <dir>]
   iris validate [--output-dir <dir>]
 
 Commands:
-  init    Create a local .planwise project scaffold
-  list    List tasks from .planwise/wbs.yaml
-  show    Show one task from .planwise/wbs.yaml
+  init     Create a local .planwise project scaffold
+  import   Import tasks from supported providers
+  list     List tasks from .planwise/wbs.yaml
+  show     Show one task from .planwise/wbs.yaml
+  status   Summarize the current WBS state
   validate Validate .planwise/wbs.yaml
 `);
 }
@@ -111,7 +119,7 @@ function parseOutputDirArgs(args) {
   return options;
 }
 
-function main(argv = process.argv.slice(2)) {
+async function main(argv = process.argv.slice(2)) {
   const [command, ...args] = argv;
 
   if (command === "--version" || command === "-v") {
@@ -124,7 +132,7 @@ function main(argv = process.argv.slice(2)) {
     return 0;
   }
 
-  if (!["init", "list", "show", "validate"].includes(command)) {
+  if (!["init", "import", "list", "show", "status", "validate"].includes(command)) {
     console.error(`Unknown command: ${command}`);
     printHelp();
     return 1;
@@ -136,6 +144,24 @@ function main(argv = process.argv.slice(2)) {
       const wbs = loadWbs(options.outputDir);
       console.log(formatTaskList(filterTasks(wbs.tasks, options)));
       return 0;
+    }
+
+    if (command === "import") {
+      const [provider, ...providerArgs] = args;
+
+      if (provider === "github") {
+        const result = await importGitHubIssues(parseGitHubImportArgs(providerArgs));
+        console.log(`Imported ${result.imported} GitHub issue(s). Created ${result.created}, updated ${result.updated}.`);
+        return 0;
+      }
+
+      if (provider === "excel") {
+        const result = await importExcelTasks(parseExcelImportArgs(providerArgs));
+        console.log(`Imported ${result.imported} Excel task(s). Created ${result.created}, updated ${result.updated}.`);
+        return 0;
+      }
+
+      throw new Error("import requires a provider: github or excel");
     }
 
     if (command === "show") {
@@ -150,6 +176,12 @@ function main(argv = process.argv.slice(2)) {
         throw new Error(`Task not found: ${taskId}`);
       }
       console.log(formatTaskDetails(task));
+      return 0;
+    }
+
+    if (command === "status") {
+      const options = parseOutputDirArgs(args);
+      console.log(formatStatusSummary(loadStatusSummary(options.outputDir)));
       return 0;
     }
 
@@ -173,7 +205,9 @@ function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) {
-  process.exitCode = main();
+  main().then((code) => {
+    process.exitCode = code;
+  });
 }
 
 module.exports = {

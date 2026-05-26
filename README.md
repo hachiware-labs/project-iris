@@ -2,7 +2,7 @@
 
 See the current state of a project across tools.
 
-Project Iris stores project metadata, a WBS task list, provider mappings, and review rubrics in a local `.planwise` directory. The current `iris` CLI supports creating the scaffold, importing GitHub/GitLab/Excel tasks, exporting a local Excel WBS view, previewing sync differences, and reading tasks from `.planwise/wbs.yaml`.
+Project Iris stores project metadata, a WBS task list, provider mappings, and review rubrics in a local `.planwise` directory. The current `iris` CLI supports creating the scaffold, importing GitHub/GitLab/Excel tasks, exporting a local Excel WBS view, previewing sync differences, applying approved GitHub/GitLab write-back, and reading tasks from `.planwise/wbs.yaml`.
 
 ## Requirements
 
@@ -138,7 +138,7 @@ iris import excel --path ./wbs.xlsx
 
 The Excel importer reads the first row as headers. Supported columns include `id`, `title`, `status`, `priority`, `owner`, `labels`, `milestone`, `start_date`, `due_date`, `target_date`, `depends_on`, `acceptance`, `description`, `risks`, and `provider_refs`. List fields can be separated by commas, semicolons, or new lines. `provider_refs` should contain JSON when preserving GitHub/GitLab links from an exported WBS.
 
-## Export And Sync Preview
+## Export And Sync
 
 Export the current WBS as a local Excel WBS view:
 
@@ -159,7 +159,21 @@ iris sync preview github --repo hachiware-labs/project-iris
 iris sync preview gitlab --project group/project
 ```
 
-`sync preview` is non-destructive. Provider write-back is intentionally not automatic; use the preview output to review conflicts and risky changes before any future apply flow.
+You can also use an Excel WBS as the desired local view when comparing against a provider:
+
+```sh
+iris sync preview github --repo hachiware-labs/project-iris --path ./wbs.xlsx
+iris sync preview gitlab --project group/project --path ./wbs.xlsx
+```
+
+`sync preview` is non-destructive and saves the last preview to `.planwise/sync/last-preview.json`. After reviewing the preview, apply supported WBS/Excel changes to GitHub or GitLab:
+
+```sh
+GITHUB_TOKEN=... iris sync apply github
+GITLAB_TOKEN=... iris sync apply gitlab
+```
+
+Apply checks that the remote issue has not changed since the saved preview. GitHub apply updates Issue title, body, state, and labels; GitHub Issues do not have native start or due date fields, so WBS dates remain local unless a future GitHub Projects date-field integration is used. GitLab apply updates title, description, state, labels, and `due_date`.
 
 ## Show One Task
 

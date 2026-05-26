@@ -7,6 +7,7 @@ const { importGitLabIssues, parseGitLabImportArgs } = require("./importers/gitla
 const { importGitHubIssues, parseGitHubImportArgs } = require("./importers/github");
 const packageJson = require("../package.json");
 const { formatStatusSummary, loadStatusSummary } = require("./status");
+const { applySync, parseSyncApplyArgs } = require("./sync/apply");
 const { formatSyncPreview, previewSync } = require("./sync/preview");
 const {
   filterTasks,
@@ -25,6 +26,7 @@ function printHelp() {
   iris import excel --path <file.xlsx> [--sheet <name-or-number>] [--output-dir <dir>]
   iris export excel --path <file.xlsx> [--output-dir <dir>]
   iris sync preview <github|gitlab|excel> [provider options] [--output-dir <dir>]
+  iris sync apply <github|gitlab> [--output-dir <dir>]
   iris list [--status <status>] [--owner <owner>] [--milestone <id>] [--label <label>] [--output-dir <dir>]
   iris show <task-id> [--output-dir <dir>]
   iris status [--output-dir <dir>]
@@ -37,7 +39,7 @@ Commands:
   list     List tasks from .planwise/wbs.yaml
   show     Show one task from .planwise/wbs.yaml
   status   Summarize the current WBS state
-  sync     Preview differences between WBS and providers
+  sync     Preview or apply differences between WBS and providers
   validate Validate .planwise/wbs.yaml
 `);
 }
@@ -213,12 +215,19 @@ async function main(argv = process.argv.slice(2)) {
 
     if (command === "sync") {
       const [action, provider, ...providerArgs] = args;
-      if (action !== "preview") {
-        throw new Error("sync requires an action: preview");
+      if (action === "preview") {
+        const diffs = await previewSync(provider, providerArgs);
+        console.log(formatSyncPreview(diffs));
+        return 0;
       }
-      const diffs = await previewSync(provider, providerArgs);
-      console.log(formatSyncPreview(diffs));
-      return 0;
+
+      if (action === "apply") {
+        const result = await applySync(provider, parseSyncApplyArgs(providerArgs));
+        console.log(`Applied ${result.applied} sync change(s).`);
+        return 0;
+      }
+
+      throw new Error("sync requires an action: preview or apply");
     }
 
     if (command === "validate") {

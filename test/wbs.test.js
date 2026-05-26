@@ -10,6 +10,7 @@ const { tasksToRows } = require("../src/exporters/excel");
 const { rowsToTasks } = require("../src/importers/excel");
 const { issueToTask: githubIssueToTask } = require("../src/importers/github");
 const { issueToTask: gitlabIssueToTask } = require("../src/importers/gitlab");
+const { applySync, supportedFieldDiffs } = require("../src/sync/apply");
 const { previewTaskDiffs } = require("../src/sync/preview");
 const { writeXlsx } = require("../src/xlsx");
 const packageJson = require("../package.json");
@@ -66,6 +67,35 @@ async function withCapturedConsoleAsync(callback) {
     console.log = originalLog;
     console.error = originalError;
   }
+}
+
+async function withMockedProvider(env, fetchImplementation, callback) {
+  const originalFetch = global.fetch;
+  const originals = {};
+  for (const key of Object.keys(env)) {
+    originals[key] = process.env[key];
+    process.env[key] = env[key];
+  }
+  global.fetch = fetchImplementation;
+
+  try {
+    return await callback();
+  } finally {
+    global.fetch = originalFetch;
+    for (const key of Object.keys(env)) {
+      if (originals[key] === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = originals[key];
+      }
+    }
+  }
+}
+
+function writeLastPreview(root, preview) {
+  const syncDir = path.join(root, ".planwise", "sync");
+  fs.mkdirSync(syncDir, { recursive: true });
+  fs.writeFileSync(path.join(syncDir, "last-preview.json"), JSON.stringify(preview, null, 2), "utf8");
 }
 
 const sampleWbs = `version: 1
@@ -375,6 +405,207 @@ test("previewTaskDiffs detects field differences", () => {
   }], "github");
 
   assert.deepEqual(diffs.map((diff) => diff.field), ["title", "status"]);
+});
+
+test("supportedFieldDiffs keeps provider writable fields only", () => {
+  const diffs = [
+    { type: "field_changed", field: "title" },
+    { type: "field_changed", field: "due_date" },
+    { type: "field_changed", field: "start_date" },
+    { type: "only_in_wbs" }
+  ];
+
+  assert.deepEqual(supportedFieldDiffs(diffs, "github").map((diff) => diff.field), ["title"]);
+  assert.deepEqual(supportedFieldDiffs(diffs, "gitlab").map((diff) => diff.field), ["title", "due_date"]);
+});
+
+test("sync apply updates GitHub issues from the saved preview", async () => {
+  const root = makePlanwiseDir(`version: 1
+
+tasks:
+  - id: GH-1
+    title: Local title
+    status: done
+    labels:
+      - bug
+    due_date: "2026-06-30"
+    provider_refs:
+      - provider: github
+        type: issue
+        repo: owner/repo
+        id: 1
+        updated_at: "2026-05-25T01:00:00Z"
+`);
+  const localTask = loadWbs(root).tasks[0];
+  const sourceTask = {
+    id: "GH-1",
+    title: "Remote title",
+    status: "todo",
+    labels: [],
+    depends_on: [],
+    provider_refs: [{
+      provider: "github",
+      type: "issue",
+      repo: "owner/repo",
+      id: 1,
+      updated_at: "2026-05-25T01:00:00Z"
+    }]
+  };
+  writeLastPreview(root, {
+    version: 1,
+    provider: "github",
+    provider_options: { repo: "owner/repo" },
+    diffs: [
+      { type: "field_changed", task_id: "GH-1", field: "title", local_task: localTask, source_task: sourceTask },
+      { type: "field_changed", task_id: "GH-1", field: "status", local_task: localTask, source_task: sourceTask },
+      { type: "field_changed", task_id: "GH-1", field: "due_date", local_task: localTask, source_task: sourceTask }
+    ]
+  });
+
+  const requests = [];
+  await withMockedProvider({ GITHUB_TOKEN: "test-token" }, async (url, options = {}) => {
+    requests.push({ url, options });
+    if ((options.method || "GET") === "GET") {
+      return {
+        ok: true,
+        json: async () => ({
+          number: 1,
+          title: "Remote title",
+          body: "",
+          state: "open",
+          labels: [],
+          assignees: [],
+          html_url: "https://github.com/owner/repo/issues/1",
+          created_at: "2026-05-25T00:00:00Z",
+          updated_at: "2026-05-25T01:00:00Z"
+        }),
+        text: async () => ""
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        number: 1,
+        title: "Local title",
+        body: "",
+        state: "closed",
+        labels: [{ name: "bug" }],
+        assignees: [],
+        html_url: "https://github.com/owner/repo/issues/1",
+        created_at: "2026-05-25T00:00:00Z",
+        updated_at: "2026-05-25T02:00:00Z"
+      }),
+      text: async () => ""
+    };
+  }, async () => {
+    const result = await applySync("github", { outputDir: root });
+    assert.equal(result.applied, 1);
+  });
+
+  const patchBody = JSON.parse(requests.find((request) => request.options.method === "PATCH").options.body);
+  assert.deepEqual(patchBody, {
+    title: "Local title",
+    state: "closed"
+  });
+  const task = loadWbs(root).tasks[0];
+  assert.equal(task.provider_refs[0].updated_at, "2026-05-25T02:00:00Z");
+});
+
+test("sync apply updates GitLab issue due dates from the saved preview", async () => {
+  const root = makePlanwiseDir(`version: 1
+
+tasks:
+  - id: GL-2
+    title: Local title
+    status: todo
+    due_date: "2026-06-30"
+    labels:
+      - planning
+    provider_refs:
+      - provider: gitlab
+        type: issue
+        host: https://gitlab.com
+        project: group/project
+        id: 2
+        updated_at: "2026-05-25T01:00:00Z"
+`);
+  const localTask = loadWbs(root).tasks[0];
+  const sourceTask = {
+    id: "GL-2",
+    title: "Local title",
+    status: "todo",
+    due_date: "2026-06-20",
+    labels: ["planning"],
+    depends_on: [],
+    provider_refs: [{
+      provider: "gitlab",
+      type: "issue",
+      host: "https://gitlab.com",
+      project: "group/project",
+      id: 2,
+      updated_at: "2026-05-25T01:00:00Z"
+    }]
+  };
+  writeLastPreview(root, {
+    version: 1,
+    provider: "gitlab",
+    provider_options: { host: "https://gitlab.com", project: "group/project" },
+    diffs: [
+      { type: "field_changed", task_id: "GL-2", field: "due_date", local_task: localTask, source_task: sourceTask }
+    ]
+  });
+
+  const requests = [];
+  await withMockedProvider({ GITLAB_TOKEN: "test-token" }, async (url, options = {}) => {
+    requests.push({ url, options });
+    if ((options.method || "GET") === "GET") {
+      return {
+        ok: true,
+        json: async () => ({
+          id: 200,
+          iid: 2,
+          title: "Local title",
+          description: "",
+          state: "opened",
+          labels: ["planning"],
+          assignees: [],
+          web_url: "https://gitlab.com/group/project/-/issues/2",
+          created_at: "2026-05-25T00:00:00Z",
+          updated_at: "2026-05-25T01:00:00Z",
+          due_date: "2026-06-20"
+        }),
+        text: async () => ""
+      };
+    }
+    return {
+      ok: true,
+      json: async () => ({
+        id: 200,
+        iid: 2,
+        title: "Local title",
+        description: "",
+        state: "opened",
+        labels: ["planning"],
+        assignees: [],
+        web_url: "https://gitlab.com/group/project/-/issues/2",
+        created_at: "2026-05-25T00:00:00Z",
+        updated_at: "2026-05-25T02:00:00Z",
+        due_date: "2026-06-30"
+      }),
+      text: async () => ""
+    };
+  }, async () => {
+    const result = await applySync("gitlab", { outputDir: root });
+    assert.equal(result.applied, 1);
+  });
+
+  const putBody = JSON.parse(requests.find((request) => request.options.method === "PUT").options.body);
+  assert.deepEqual(putBody, {
+    due_date: "2026-06-30"
+  });
+  const task = loadWbs(root).tasks[0];
+  assert.equal(task.due_date, "2026-06-30");
+  assert.equal(task.provider_refs[0].updated_at, "2026-05-25T02:00:00Z");
 });
 
 test("main supports status with output-dir", async () => {

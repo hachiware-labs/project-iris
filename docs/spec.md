@@ -35,6 +35,8 @@ Given：`.planwise/wbs.yaml` が存在し、対象 GitHub repository が指定�
 When：ユーザーが `iris import github --repo owner/name` を実行する。
 Done：GitHub Issue が Task に変換され、`provider_refs` に provider、repo、issue number、URL、timestamps を保持して WBS に保存される。
 
+制約：GitHub Issue 本体には native な start date / due date がない。Project Iris は milestone `due_on` を `due_date` / `target_date` として取り込めるが、Issue 本体への日付書き戻しは行わない。Project date fields 連携は別要件として扱う。
+
 #### エラー分岐（REQ-0002の枝番）
 | ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
 |---|---|---|---|
@@ -169,6 +171,8 @@ Done：追加、更新、削除、競合、破壊的変更候補が SyncDiff と
 Given：sync preview の結果があり、ユーザーが反映対象の差分を承認している。
 When：ユーザーが `iris sync apply` を実行する。
 Done：承認済み差分だけが provider に書き戻され、反映結果が WBS と provider_refs に保存される。
+
+制約：GitHub apply は Issue 本体がサポートする title/body/state/labels を対象とする。GitLab apply は title/description/state/labels/due_date を対象とする。start_date は WBS/Excel 側の計画日付として保持し、provider が明示的に対応する連携を追加するまでは書き戻さない。
 
 #### エラー分岐（REQ-0013の枝番）
 | ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |

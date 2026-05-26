@@ -18,6 +18,7 @@
 | REQ-0011 | WBS を Excel に export したら、provider_refs を保持したローカル WBS ビューを作成する。 | UC-8 |
 | REQ-0012 | sync preview を実行したら、Excel/WBS/provider 間の差分とリスクを表示する。 | UC-8, UC-9 |
 | REQ-0013 | sync apply を実行したら、承認済み差分だけを provider に反映する。 | UC-9 |
+| REQ-0014 | GitLab Issues を取り込んだら、Issue を provider_refs つき Task として WBS に追加または更新する。 | UC-2 |
 
 ### [PIRIS-0001] 管理領域を初期化したら、Project Iris が読むローカル scaffold を作成する。
 Given：ユーザーが Project Iris を使いたい対象ディレクトリを持っている。
@@ -40,6 +41,18 @@ Done：GitHub Issue が Task に変換され、`provider_refs` に provider、re
 | ERR-PIRIS-0002 | repository 指定が `owner/name` 形式ではない | 正しい repository 名を指定する | MSG-PIRIS-0002 |
 | ERR-PIRIS-0003 | GitHub API が権限不足または取得失敗を返す | `GITHUB_TOKEN` と repository 権限を確認する | MSG-PIRIS-0003 |
 | ERR-PIRIS-0004 | 取り込み後の WBS が検証に失敗する | エラー内容に従って WBS または provider データを修正する | MSG-PIRIS-0004 |
+
+### [PIRIS-0014] GitLab Issues を取り込んだら、Issue を provider_refs つき Task として WBS に追加または更新する。
+Given：`.planwise/wbs.yaml` が存在し、対象 GitLab project が指定されている。
+When：ユーザーが `iris import gitlab --project group/project` を実行する。
+Done：GitLab Issue が Task に変換され、`provider_refs` に provider、host、project、issue iid、URL、timestamps を保持して WBS に保存される。Issue、milestone、iteration の start/due date が存在する場合は Task の日付として保存される。
+
+#### エラー分岐（REQ-0014の枝番）
+| ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
+|---|---|---|---|
+| ERR-PIRIS-0029 | GitLab project が指定されていない | `--project` を指定する | MSG-PIRIS-0029 |
+| ERR-PIRIS-0030 | GitLab API が権限不足または取得失敗を返す | `GITLAB_TOKEN`、host、project 権限を確認する | MSG-PIRIS-0030 |
+| ERR-PIRIS-0031 | 取り込み後の WBS が検証に失敗する | エラー内容に従って WBS または provider データを修正する | MSG-PIRIS-0031 |
 
 ### [PIRIS-0003] Excel WBS を取り込んだら、Excel 行を provider_refs つき Task として WBS に追加または更新する。
 Given：`.planwise/wbs.yaml` が存在し、読み取り可能な `.xlsx` ファイルがある。
@@ -195,6 +208,9 @@ Done：承認済み差分だけが provider に書き戻され、反映結果が
 | MSG-PIRIS-0026 | `Sync apply requires a preview result.` | stderr | preview 不足 | REQ-0013 / ERR-PIRIS-0026 |
 | MSG-PIRIS-0027 | `Sync apply failed: provider write permission is missing.` | stderr | provider 書込権限不足 | REQ-0013 / ERR-PIRIS-0027 |
 | MSG-PIRIS-0028 | `Sync apply stopped: remote data changed after preview.` | stderr | preview stale | REQ-0013 / ERR-PIRIS-0028 |
+| MSG-PIRIS-0029 | `--project is required` | stderr | GitLab project 指定不足 | REQ-0014 / ERR-PIRIS-0029 |
+| MSG-PIRIS-0030 | `GitLab request failed: {status}` | stderr | GitLab API 取得失敗 | REQ-0014 / ERR-PIRIS-0030 |
+| MSG-PIRIS-0031 | `Cannot save invalid WBS: {errors}` | stderr | GitLab import 後の WBS 不整合 | REQ-0014 / ERR-PIRIS-0031 |
 
 ## エラーID管理（ERR-xxxx）
 | ID | 原因 | 検出条件 | ユーザーアクション | 再試行可否 | 関連MSG-ID | 関連REQ |
@@ -227,3 +243,6 @@ Done：承認済み差分だけが provider に書き戻され、反映結果が
 | ERR-PIRIS-0026 | preview 不足 | apply 対象の preview がない | preview を先に実行する | 可 | MSG-PIRIS-0026 | REQ-0013 |
 | ERR-PIRIS-0027 | provider 書込権限不足 | write API が権限エラーを返す | token と権限を確認する | 可 | MSG-PIRIS-0027 | REQ-0013 |
 | ERR-PIRIS-0028 | preview stale | preview 後に remote が更新された | preview を再実行する | 可 | MSG-PIRIS-0028 | REQ-0013 |
+| ERR-PIRIS-0029 | GitLab project 指定不足 | `--project` がない | project ID または path を指定する | 可 | MSG-PIRIS-0029 | REQ-0014 |
+| ERR-PIRIS-0030 | GitLab API 取得失敗 | API response が success でない | token、host、project 権限を確認する | 可 | MSG-PIRIS-0030 | REQ-0014 |
+| ERR-PIRIS-0031 | GitLab import 後の WBS 不整合 | save 前 validation が失敗する | WBS と provider mapping を修正する | 可 | MSG-PIRIS-0031 | REQ-0014 |

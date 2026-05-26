@@ -1,4 +1,5 @@
 const { mergeTasks } = require("./merge");
+const { setTaskDate } = require("../dates");
 const { loadWbs, saveWbs } = require("../wbs");
 
 function parseGitHubImportArgs(args) {
@@ -106,6 +107,18 @@ function issueToTask(issue, repo) {
   if (issue.body) task.description = issue.body;
   if (issue.assignees && issue.assignees.length > 0) task.owner = issue.assignees[0].login;
   if (issue.milestone) task.milestone = issue.milestone.title;
+  if (issue.milestone && issue.milestone.due_on) {
+    setTaskDate(task, "due_date", issue.milestone.due_on, {
+      provider: "github",
+      source: "milestone",
+      field: "due_on"
+    });
+    setTaskDate(task, "target_date", issue.milestone.due_on, {
+      provider: "github",
+      source: "milestone",
+      field: "due_on"
+    });
+  }
 
   return task;
 }

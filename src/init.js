@@ -52,6 +52,25 @@ providers:
         high: priority:high
         medium: priority:medium
         low: priority:low
+  gitlab:
+    enabled: false
+    host: https://gitlab.com
+    default_project: ""
+    auth:
+      token_env: GITLAB_TOKEN
+    mapping:
+      status:
+        todo: opened
+        in_progress: opened
+        blocked: opened
+        review: opened
+        done: closed
+        cancelled: closed
+      priority:
+        urgent: priority:urgent
+        high: priority:high
+        medium: priority:medium
+        low: priority:low
   excel:
     enabled: false
     default_path: ./wbs.xlsx

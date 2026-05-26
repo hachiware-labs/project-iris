@@ -7,6 +7,10 @@ function taskProviderRefKey(ref) {
     return `github:${ref.repo}#${ref.id}`;
   }
 
+  if (ref.provider === "gitlab" && ref.project && ref.id !== undefined) {
+    return `gitlab:${ref.host || "https://gitlab.com"}:${ref.project}#${ref.id}`;
+  }
+
   if (ref.provider === "excel" && ref.path && ref.row !== undefined) {
     return `excel:${ref.path}#${ref.row}`;
   }

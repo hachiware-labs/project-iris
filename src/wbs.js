@@ -82,13 +82,13 @@ function validateWbs(wbs) {
       errors.push(`${pathLabel}.title is required`);
     }
 
-    for (const field of ["status", "priority", "owner", "milestone", "description"]) {
+    for (const field of ["status", "priority", "owner", "milestone", "description", "start_date", "due_date", "target_date"]) {
       if (task[field] !== undefined && typeof task[field] !== "string") {
         errors.push(`${pathLabel}.${field} must be a string`);
       }
     }
 
-    for (const field of ["labels", "depends_on", "acceptance", "risks"]) {
+    for (const field of ["labels", "depends_on", "acceptance", "risks", "provider_refs", "date_refs"]) {
       if (task[field] !== undefined && !Array.isArray(task[field])) {
         errors.push(`${pathLabel}.${field} must be an array`);
       }
@@ -227,6 +227,9 @@ function formatTaskDetails(task) {
   if (task.priority) lines.push(`Priority: ${task.priority}`);
   if (task.owner) lines.push(`Owner: ${task.owner}`);
   if (task.milestone) lines.push(`Milestone: ${task.milestone}`);
+  if (task.start_date) lines.push(`Start date: ${task.start_date}`);
+  if (task.due_date) lines.push(`Due date: ${task.due_date}`);
+  if (task.target_date) lines.push(`Target date: ${task.target_date}`);
   if (task.labels && task.labels.length > 0) lines.push(`Labels: ${task.labels.join(", ")}`);
   if (task.depends_on && task.depends_on.length > 0) lines.push(`Depends on: ${task.depends_on.join(", ")}`);
   if (task.description) lines.push("", "Description:", task.description);

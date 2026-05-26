@@ -2,7 +2,7 @@
 
 See the current state of a project across tools.
 
-Project Iris stores project metadata, a WBS task list, provider mappings, and review rubrics in a local `.planwise` directory. The current `iris` CLI supports creating the scaffold and reading tasks from `.planwise/wbs.yaml`.
+Project Iris stores project metadata, a WBS task list, provider mappings, and review rubrics in a local `.planwise` directory. The current `iris` CLI supports creating the scaffold, importing GitHub/GitLab/Excel tasks, exporting a local Excel WBS view, previewing sync differences, and reading tasks from `.planwise/wbs.yaml`.
 
 ## Requirements
 
@@ -119,7 +119,16 @@ Import open GitHub Issues into `.planwise/wbs.yaml`:
 iris import github --repo hachiware-labs/project-iris
 ```
 
-Read private repositories by setting `GITHUB_TOKEN` before running the command. GitHub Issues do not have a native start date field; Project Iris preserves Issue timestamps such as `created_at`, `updated_at`, and `closed_at` in `provider_refs`. Start dates should come from GitHub Projects or organization issue fields in a later provider-specific import.
+Read private repositories by setting `GITHUB_TOKEN` before running the command. GitHub Issues do not have a native start date field in the repository issue API; Project Iris preserves Issue timestamps such as `created_at`, `updated_at`, and `closed_at` in `provider_refs`, and maps milestone `due_on` to `due_date` / `target_date`.
+
+Import GitLab Issues:
+
+```sh
+iris import gitlab --project group/project
+iris import gitlab --host https://gitlab.example.com --project group/project --state all
+```
+
+Read private GitLab projects by setting `GITLAB_TOKEN`. GitLab issue `start_date` and `due_date` are mapped when present; milestone or iteration dates are used as fallback date references.
 
 Import an Excel WBS:
 
@@ -127,7 +136,30 @@ Import an Excel WBS:
 iris import excel --path ./wbs.xlsx
 ```
 
-The Excel importer reads the first row as headers. Supported columns include `id`, `title`, `status`, `priority`, `owner`, `labels`, `milestone`, `depends_on`, `acceptance`, `description`, and `risks`. List fields can be separated by commas, semicolons, or new lines.
+The Excel importer reads the first row as headers. Supported columns include `id`, `title`, `status`, `priority`, `owner`, `labels`, `milestone`, `start_date`, `due_date`, `target_date`, `depends_on`, `acceptance`, `description`, `risks`, and `provider_refs`. List fields can be separated by commas, semicolons, or new lines. `provider_refs` should contain JSON when preserving GitHub/GitLab links from an exported WBS.
+
+## Export And Sync Preview
+
+Export the current WBS as a local Excel WBS view:
+
+```sh
+iris export excel --path ./wbs.xlsx
+```
+
+Preview differences between the local WBS and an Excel file:
+
+```sh
+iris sync preview excel --path ./wbs.xlsx
+```
+
+Preview differences against provider issues without changing either side:
+
+```sh
+iris sync preview github --repo hachiware-labs/project-iris
+iris sync preview gitlab --project group/project
+```
+
+`sync preview` is non-destructive. Provider write-back is intentionally not automatic; use the preview output to review conflicts and risky changes before any future apply flow.
 
 ## Show One Task
 
@@ -196,7 +228,7 @@ Run the CLI smoke test:
 npm run smoke
 ```
 
-The smoke test creates a temporary project, runs `init`, verifies the scaffold files, seeds one WBS task, then checks `list` and `show`.
+The smoke test creates a temporary project, runs `init`, verifies the scaffold files, seeds one WBS task, then checks `list`, `show`, Excel export, and Excel sync preview.
 
 ## Release Policy
 

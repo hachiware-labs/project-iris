@@ -3,10 +3,15 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const readXlsxFile = require("read-excel-file/node");
 
 const { main, parseOutputDirArgs, parseReadArgs } = require("../src/cli");
+const { tasksToRows } = require("../src/exporters/excel");
 const { rowsToTasks } = require("../src/importers/excel");
-const { issueToTask } = require("../src/importers/github");
+const { issueToTask: githubIssueToTask } = require("../src/importers/github");
+const { issueToTask: gitlabIssueToTask } = require("../src/importers/gitlab");
+const { previewTaskDiffs } = require("../src/sync/preview");
+const { writeXlsx } = require("../src/xlsx");
 const packageJson = require("../package.json");
 const {
   filterTasks,
@@ -256,14 +261,14 @@ test("main supports validate with output-dir", async () => {
 });
 
 test("issueToTask maps GitHub issues to WBS tasks", () => {
-  const task = issueToTask({
+  const task = githubIssueToTask({
     number: 12,
     title: "Connect GitHub import",
     body: "Import open issues",
     state: "open",
     labels: [{ name: "priority:high" }, { name: "blocked" }],
     assignees: [{ login: "kitfactory" }],
-    milestone: { title: "M-001" },
+    milestone: { title: "M-001", due_on: "2026-06-30T00:00:00Z" },
     html_url: "https://github.com/hachiware-labs/project-iris/issues/12",
     created_at: "2026-05-25T00:00:00Z",
     updated_at: "2026-05-25T01:00:00Z"
@@ -274,21 +279,102 @@ test("issueToTask maps GitHub issues to WBS tasks", () => {
   assert.equal(task.priority, "high");
   assert.equal(task.owner, "kitfactory");
   assert.equal(task.milestone, "M-001");
+  assert.equal(task.due_date, "2026-06-30");
+  assert.equal(task.target_date, "2026-06-30");
   assert.equal(task.provider_refs[0].provider, "github");
+});
+
+test("issueToTask maps GitLab issues to WBS tasks", () => {
+  const task = gitlabIssueToTask({
+    id: 999,
+    iid: 34,
+    title: "Connect GitLab import",
+    description: "Import opened issues",
+    state: "opened",
+    labels: ["priority:medium"],
+    assignees: [{ username: "release" }],
+    milestone: { title: "M-002", start_date: "2026-06-01", due_date: "2026-06-20" },
+    web_url: "https://gitlab.com/group/project/-/issues/34",
+    created_at: "2026-05-25T00:00:00Z",
+    updated_at: "2026-05-25T01:00:00Z",
+    start_date: null,
+    due_date: null
+  }, {
+    host: "https://gitlab.com",
+    project: "group/project"
+  });
+
+  assert.equal(task.id, "GL-34");
+  assert.equal(task.status, "todo");
+  assert.equal(task.priority, "medium");
+  assert.equal(task.owner, "release");
+  assert.equal(task.milestone, "M-002");
+  assert.equal(task.start_date, "2026-06-01");
+  assert.equal(task.due_date, "2026-06-20");
+  assert.equal(task.provider_refs[0].provider, "gitlab");
 });
 
 test("rowsToTasks maps Excel rows to WBS tasks", () => {
   const tasks = rowsToTasks([
-    ["ID", "Title", "Status", "Priority", "Owner", "Labels", "Depends On", "Acceptance"],
-    ["T-010", "Import spreadsheet", "todo", "medium", "ops", "excel, import", "T-001; T-002", "Rows become tasks\nIDs are preserved"]
+    ["ID", "Title", "Status", "Priority", "Owner", "Labels", "Start Date", "Due Date", "Depends On", "Acceptance", "Provider Refs"],
+    ["T-010", "Import spreadsheet", "todo", "medium", "ops", "excel, import", "2026-06-01", "2026-06-14", "T-001; T-002", "Rows become tasks\nIDs are preserved", "[{\"provider\":\"github\",\"repo\":\"owner/repo\",\"id\":10}]"]
   ], "C:\\tmp\\wbs.xlsx");
 
   assert.equal(tasks.length, 1);
   assert.equal(tasks[0].id, "T-010");
   assert.equal(tasks[0].title, "Import spreadsheet");
   assert.deepEqual(tasks[0].labels, ["excel", "import"]);
+  assert.equal(tasks[0].start_date, "2026-06-01");
+  assert.equal(tasks[0].due_date, "2026-06-14");
   assert.deepEqual(tasks[0].depends_on, ["T-001", "T-002"]);
   assert.deepEqual(tasks[0].acceptance, ["Rows become tasks", "IDs are preserved"]);
+  assert.deepEqual(tasks[0].provider_refs, [{ provider: "github", repo: "owner/repo", id: 10 }]);
+});
+
+test("writeXlsx writes rows that read-excel-file can read", async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "project-iris-xlsx-"));
+  const xlsxPath = path.join(root, "wbs.xlsx");
+
+  writeXlsx(xlsxPath, [
+    ["id", "title"],
+    ["T-001", "Round trip"]
+  ]);
+
+  const result = await readXlsxFile(xlsxPath);
+  const rows = Array.isArray(result[0]) ? result : result[0].data;
+  assert.deepEqual(rows, [
+    ["id", "title"],
+    ["T-001", "Round trip"]
+  ]);
+});
+
+test("tasksToRows exports provider refs for local Excel WBS views", () => {
+  const rows = tasksToRows([{
+    id: "GH-1",
+    title: "Export me",
+    status: "todo",
+    labels: ["github"],
+    provider_refs: [{ provider: "github", repo: "owner/repo", id: 1 }]
+  }]);
+
+  assert.equal(rows[0].includes("provider_refs"), true);
+  assert.match(rows[1][14], /"provider":"github"/);
+});
+
+test("previewTaskDiffs detects field differences", () => {
+  const diffs = previewTaskDiffs([{
+    id: "GH-1",
+    title: "Local",
+    status: "todo",
+    provider_refs: [{ provider: "github", repo: "owner/repo", id: 1 }]
+  }], [{
+    id: "GH-1",
+    title: "Remote",
+    status: "done",
+    provider_refs: [{ provider: "github", repo: "owner/repo", id: 1 }]
+  }], "github");
+
+  assert.deepEqual(diffs.map((diff) => diff.field), ["title", "status"]);
 });
 
 test("main supports status with output-dir", async () => {

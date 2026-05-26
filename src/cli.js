@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 
 const { initPlanwise } = require("./init");
+const { exportExcelTasks, parseExcelExportArgs } = require("./exporters/excel");
 const { importExcelTasks, parseExcelImportArgs } = require("./importers/excel");
+const { importGitLabIssues, parseGitLabImportArgs } = require("./importers/gitlab");
 const { importGitHubIssues, parseGitHubImportArgs } = require("./importers/github");
 const packageJson = require("../package.json");
 const { formatStatusSummary, loadStatusSummary } = require("./status");
+const { formatSyncPreview, previewSync } = require("./sync/preview");
 const {
   filterTasks,
   findTask,
@@ -18,7 +21,10 @@ function printHelp() {
   iris --version
   iris init [--output-dir <dir>] [--force]
   iris import github --repo <owner/name> [--state open|closed|all] [--limit <n>] [--output-dir <dir>]
+  iris import gitlab --project <id-or-path> [--host <url>] [--state opened|closed|all] [--limit <n>] [--output-dir <dir>]
   iris import excel --path <file.xlsx> [--sheet <name-or-number>] [--output-dir <dir>]
+  iris export excel --path <file.xlsx> [--output-dir <dir>]
+  iris sync preview <github|gitlab|excel> [provider options] [--output-dir <dir>]
   iris list [--status <status>] [--owner <owner>] [--milestone <id>] [--label <label>] [--output-dir <dir>]
   iris show <task-id> [--output-dir <dir>]
   iris status [--output-dir <dir>]
@@ -26,10 +32,12 @@ function printHelp() {
 
 Commands:
   init     Create a local .planwise project scaffold
+  export   Export local WBS views
   import   Import tasks from supported providers
   list     List tasks from .planwise/wbs.yaml
   show     Show one task from .planwise/wbs.yaml
   status   Summarize the current WBS state
+  sync     Preview differences between WBS and providers
   validate Validate .planwise/wbs.yaml
 `);
 }
@@ -132,7 +140,7 @@ async function main(argv = process.argv.slice(2)) {
     return 0;
   }
 
-  if (!["init", "import", "list", "show", "status", "validate"].includes(command)) {
+  if (!["init", "export", "import", "list", "show", "status", "sync", "validate"].includes(command)) {
     console.error(`Unknown command: ${command}`);
     printHelp();
     return 1;
@@ -155,13 +163,31 @@ async function main(argv = process.argv.slice(2)) {
         return 0;
       }
 
+      if (provider === "gitlab") {
+        const result = await importGitLabIssues(parseGitLabImportArgs(providerArgs));
+        console.log(`Imported ${result.imported} GitLab issue(s). Created ${result.created}, updated ${result.updated}.`);
+        return 0;
+      }
+
       if (provider === "excel") {
         const result = await importExcelTasks(parseExcelImportArgs(providerArgs));
         console.log(`Imported ${result.imported} Excel task(s). Created ${result.created}, updated ${result.updated}.`);
         return 0;
       }
 
-      throw new Error("import requires a provider: github or excel");
+      throw new Error("import requires a provider: github, gitlab, or excel");
+    }
+
+    if (command === "export") {
+      const [provider, ...providerArgs] = args;
+
+      if (provider === "excel") {
+        const result = exportExcelTasks(parseExcelExportArgs(providerArgs));
+        console.log(`Exported ${result.exported} task(s) to ${result.path}.`);
+        return 0;
+      }
+
+      throw new Error("export requires a provider: excel");
     }
 
     if (command === "show") {
@@ -182,6 +208,16 @@ async function main(argv = process.argv.slice(2)) {
     if (command === "status") {
       const options = parseOutputDirArgs(args);
       console.log(formatStatusSummary(loadStatusSummary(options.outputDir)));
+      return 0;
+    }
+
+    if (command === "sync") {
+      const [action, provider, ...providerArgs] = args;
+      if (action !== "preview") {
+        throw new Error("sync requires an action: preview");
+      }
+      const diffs = await previewSync(provider, providerArgs);
+      console.log(formatSyncPreview(diffs));
       return 0;
     }
 

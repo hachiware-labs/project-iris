@@ -1,5 +1,6 @@
 const path = require("node:path");
 const readXlsxFile = require("read-excel-file/node");
+const { normalizeDate } = require("../dates");
 const { mergeTasks } = require("./merge");
 const { loadWbs, saveWbs } = require("../wbs");
 
@@ -12,9 +13,13 @@ const COLUMN_ALIASES = {
   owner: ["owner", "assignee", "担当"],
   labels: ["labels", "label", "tags"],
   milestone: ["milestone", "phase"],
+  start_date: ["start_date", "start date", "start"],
+  due_date: ["due_date", "due date", "due"],
+  target_date: ["target_date", "target date", "target"],
   depends_on: ["depends_on", "depends on", "dependencies", "depends"],
   acceptance: ["acceptance", "acceptance criteria", "done when"],
-  risks: ["risks", "risk"]
+  risks: ["risks", "risk"],
+  provider_refs: ["provider_refs", "provider refs", "provider references"]
 };
 
 function parseExcelImportArgs(args) {
@@ -93,6 +98,19 @@ function stringifyCell(value) {
   return text === "" ? undefined : text;
 }
 
+function parseJsonCell(value, field) {
+  const text = stringifyCell(value);
+  if (!text) {
+    return undefined;
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    throw new Error(`${field} must contain valid JSON`);
+  }
+}
+
 function columnIndexesFor(headers) {
   const normalizedHeaders = headers.map(normalizeHeader);
   const indexes = {};
@@ -127,12 +145,16 @@ function rowsToTasks(rows, sourcePath) {
 
       const spreadsheetRow = rowIndex + 2;
       const id = indexes.id === undefined ? `XL-${spreadsheetRow}` : stringifyCell(row[indexes.id]) || `XL-${spreadsheetRow}`;
+      const providerRefs = indexes.provider_refs === undefined
+        ? undefined
+        : parseJsonCell(row[indexes.provider_refs], `row ${spreadsheetRow} provider_refs`);
+
       const task = {
         id,
         title,
         status: stringifyCell(row[indexes.status]) || "todo",
         depends_on: splitList(row[indexes.depends_on]),
-        provider_refs: [{
+        provider_refs: Array.isArray(providerRefs) && providerRefs.length > 0 ? providerRefs : [{
           provider: "excel",
           type: "row",
           path: sourcePath,
@@ -143,6 +165,13 @@ function rowsToTasks(rows, sourcePath) {
       for (const field of ["description", "priority", "owner", "milestone"]) {
         if (indexes[field] !== undefined) {
           const value = stringifyCell(row[indexes[field]]);
+          if (value) task[field] = value;
+        }
+      }
+
+      for (const field of ["start_date", "due_date", "target_date"]) {
+        if (indexes[field] !== undefined) {
+          const value = normalizeDate(row[indexes[field]]);
           if (value) task[field] = value;
         }
       }
@@ -180,5 +209,6 @@ module.exports = {
   importExcelTasks,
   parseExcelImportArgs,
   rowsToTasks,
-  splitList
+  splitList,
+  stringifyCell
 };

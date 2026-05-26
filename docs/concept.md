@@ -40,7 +40,7 @@
 | ID | 機能 | 解決するPain | 対応UC |
 |---|---|---|---|
 | F-1 | `.planwise` 初期化と WBS 正本管理 | P-1, P-5 | UC-1 |
-| F-2 | GitHub Issues 取り込み | P-1, P-3, P-5 | UC-2 |
+| F-2 | GitHub/GitLab Issues 取り込み | P-1, P-3, P-5 | UC-2 |
 | F-3 | Excel WBS 取り込み | P-1, P-4 | UC-2 |
 | F-4 | 現在状態の集計 | P-1, P-3 | UC-3 |
 | F-5 | 分析ルールによるリスク・支援候補検出 | P-2, P-3, P-6 | UC-4 |
@@ -58,7 +58,7 @@
 | ID | 主体 | 目的 | 前提 | 主要手順（最小操作） | 成功条件 | 例外/制約 |
 |---|---|---|---|---|---|---|
 | UC-1 | プロジェクトリード | ローカルに Project Iris の管理領域を作る | Node.js と npm が使える | `iris init` を実行する | `.planwise` 配下に project/wbs/providers/rubrics が作成される | 既存 `.planwise` がある場合は `--force` が必要 |
-| UC-2 | プロジェクトリード | GitHub と Excel から WBS にタスクを取り込む | GitHub repo または Excel ファイルがある | `iris import github --repo owner/name` または `iris import excel --path file.xlsx` を実行する | provider_refs つき task が `.planwise/wbs.yaml` に追加または更新される | GitHub token 不足、Excel ヘッダー不足、重複 ID は明示エラー |
+| UC-2 | プロジェクトリード | GitHub/GitLab と Excel から WBS にタスクを取り込む | GitHub repo、GitLab project、または Excel ファイルがある | `iris import github --repo owner/name`、`iris import gitlab --project group/project`、または `iris import excel --path file.xlsx` を実行する | provider_refs つき task が `.planwise/wbs.yaml` に追加または更新される | GitHub/GitLab token 不足、Excel ヘッダー不足、重複 ID は明示エラー |
 | UC-3 | プロジェクトリード | 現在のタスク状態を把握する | WBS が存在する | `iris status` を実行する | status 別件数、owner 件数、blocked、高優先度未完了が表示される | 履歴や予測は含めない |
 | UC-4 | プロジェクトリード | リスクと支援候補を抽出する | WBS と provider_refs がある | `iris analyze` を実行する | blocked、stale、高優先度 owner なし、acceptance 不足、依存ボトルネック、provider 差分が finding として出る | データ不足の場合は断定しない |
 | UC-5 | プロジェクトリード | 進捗推移とバーンダウンを見る | 複数日の snapshot がある | `iris snapshot` を継続実行し、`iris burndown` を実行する | 残タスク推移、burn rate、必要 burn rate、見通しが表示される | 履歴不足の場合は予測せず、snapshot 取得を促す |
@@ -81,7 +81,7 @@
 | レイヤー | 役割 | 主な処理/データ流れ |
 |---|---|---|
 | CLI 層 | ユーザー操作の入口 | `iris init/import/status/analyze/snapshot/burndown/report` を受け、各サービスに処理を委譲する |
-| Provider Import 層 | 外部ツールの読み取り | GitHub Issues や Excel 行を provider_refs つき Task に変換する |
+| Provider Import 層 | 外部ツールの読み取り | GitHub/GitLab Issues や Excel 行を provider_refs つき Task に変換する |
 | WBS Core 層 | 正規化データ管理 | `.planwise/wbs.yaml` の読み書き、検証、merge、ID/依存関係チェックを行う |
 | Analysis 層 | 現在状態とリスクの検出 | status 集計、blocked/stale/priority/owner/acceptance/dependency/provider 差分を finding 化する |
 | History 層 | 進捗履歴管理 | snapshot を保存し、burndown に必要な時系列データを提供する |
@@ -94,7 +94,7 @@
 |---|---|---|
 | Project | id, name, description, owner, status | UC-1 / F-1 |
 | Task | id, title, status, priority, owner, labels, milestone, depends_on, acceptance, risks, description, provider_refs | UC-2, UC-3, UC-4, UC-6 / F-2, F-3, F-4, F-5, F-8 |
-| ProviderRef | provider, type, repo/path, id/row, url, created_at, updated_at, closed_at | UC-2, UC-4 / F-2, F-3, F-9 |
+| ProviderRef | provider, type, repo/project/path, id/row, url, created_at, updated_at, closed_at | UC-2, UC-4 / F-2, F-3, F-9 |
 | Finding | id, severity, category, title, evidence, related_tasks, related_people, recommendation | UC-4, UC-6 / F-5, F-8 |
 | Snapshot | date, scope, total, remaining, done, by_status, by_milestone | UC-5, UC-6 / F-6, F-7, F-8 |
 | Burndown | scope, start_date, latest_date, remaining_series, burn_rate, required_burn_rate, outlook | UC-5, UC-6 / F-7, F-8 |
@@ -119,7 +119,7 @@
 #11.用語集（Glossary）
 - Project Iris：複数ツールからプロジェクトの今を見える形にし、見るべき焦点を合わせる CLI。Iris は Integrated Reporting & Insight System の意味を持つ。
 - WBS：作業分解構造。Project Iris では `.planwise/wbs.yaml` をローカル正本として扱う。
-- provider：GitHub、Excel など、タスク情報の入力元。
+- provider：GitHub、GitLab、Excel など、タスク情報の入力元。
 - provider_refs：Task と外部 provider 上の Issue/行などを結びつける参照情報。
 - Finding：分析で検出されたリスク、支援候補、整合性問題、進捗シグナル。
 - Attention：責任追及ではなく、支援や判断が必要な箇所を示す概念。

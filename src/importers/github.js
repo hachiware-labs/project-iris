@@ -1,6 +1,7 @@
 const { mergeTasks } = require("./merge");
 const { setTaskDate } = require("../dates");
 const { loadWbs, saveWbs } = require("../wbs");
+const { normalizeTask, normalizeStatus } = require("./normalize");
 
 function parseGitHubImportArgs(args) {
   const options = {
@@ -120,7 +121,8 @@ function issueToTask(issue, repo) {
     });
   }
 
-  return task;
+  task.status = normalizeStatus(task.status);
+  return normalizeTask(task);
 }
 
 async function fetchGitHubIssues({ repo, state, limit, token }) {

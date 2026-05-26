@@ -3,6 +3,7 @@ const readXlsxFile = require("read-excel-file/node");
 const { normalizeDate } = require("../dates");
 const { mergeTasks } = require("./merge");
 const { loadWbs, saveWbs } = require("../wbs");
+const { normalizeTask } = require("./normalize");
 
 const COLUMN_ALIASES = {
   id: ["id", "task id", "task_id", "wbs id"],
@@ -183,7 +184,7 @@ function rowsToTasks(rows, sourcePath) {
         }
       }
 
-      return task;
+      return normalizeTask(task);
     })
     .filter(Boolean);
 }

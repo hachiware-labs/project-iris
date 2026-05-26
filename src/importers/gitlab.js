@@ -1,6 +1,7 @@
 const { setTaskDate } = require("../dates");
 const { mergeTasks } = require("./merge");
 const { loadWbs, saveWbs } = require("../wbs");
+const { normalizeTask, normalizeStatus } = require("./normalize");
 
 function parseGitLabImportArgs(args) {
   const options = {
@@ -160,7 +161,8 @@ function issueToTask(issue, { host = "https://gitlab.com", project }) {
     });
   }
 
-  return task;
+  task.status = normalizeStatus(task.status);
+  return normalizeTask(task);
 }
 
 async function fetchGitLabIssues({ host, project, state, limit, token }) {

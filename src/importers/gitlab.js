@@ -115,7 +115,8 @@ function issueToTask(issue, { host = "https://gitlab.com", project }) {
   const priority = gitlabPriorityForIssue(issue);
   if (priority) task.priority = priority;
   if (issue.description) task.description = issue.description;
-  if (issue.assignees && issue.assignees.length > 0) task.owner = issue.assignees[0].username;
+  if (issue.assignees && issue.assignees.length > 0) task.owner = issue.assignees[0];
+  else if (issue.assignee) task.owner = issue.assignee;
   if (issue.milestone) task.milestone = issue.milestone.title;
 
   setTaskDate(task, "start_date", issue.start_date, {

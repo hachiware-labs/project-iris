@@ -344,6 +344,61 @@ test("issueToTask maps GitLab issues to WBS tasks", () => {
   assert.equal(task.provider_refs[0].provider, "gitlab");
 });
 
+test("issueToTask normalizes GitHub owner display names", () => {
+  const task = githubIssueToTask({
+    number: 13,
+    title: "GitHub display name mapping",
+    body: "Import issue with owner object",
+    state: "open",
+    labels: [],
+    assignee: {
+      name: "Alice Example",
+      login: "alice",
+      display_name: "Alice Display"
+    },
+    html_url: "https://github.com/hachiware-labs/project-iris/issues/13",
+    created_at: "2026-05-25T00:00:00Z",
+    updated_at: "2026-05-25T01:00:00Z"
+  }, "hachiware-labs/project-iris");
+
+  assert.equal(task.owner, "Alice Display");
+});
+
+test("issueToTask normalizes GitLab owner display names", () => {
+  const task = gitlabIssueToTask({
+    id: 1000,
+    iid: 35,
+    title: "GitLab display name mapping",
+    description: "Import issue with assignee object",
+    state: "opened",
+    labels: [],
+    assignees: [{
+      name: "Bob Example",
+      username: "bob"
+    }],
+    web_url: "https://gitlab.com/group/project/-/issues/35",
+    created_at: "2026-05-25T00:00:00Z",
+    updated_at: "2026-05-25T01:00:00Z",
+    start_date: null,
+    due_date: null
+  }, {
+    host: "https://gitlab.com",
+    project: "group/project"
+  });
+
+  assert.equal(task.owner, "Bob Example");
+});
+
+test("rowsToTasks maps owner via display name header alias", () => {
+  const tasks = rowsToTasks([
+    ["ID", "Title", "Display Name", "Status"],
+    ["T-020", "Spreadsheet mapping", "Carol Example", "done"]
+  ], "C:\\tmp\\wbs.xlsx");
+
+  assert.equal(tasks.length, 1);
+  assert.equal(tasks[0].owner, "Carol Example");
+});
+
 test("rowsToTasks maps Excel rows to WBS tasks", () => {
   const tasks = rowsToTasks([
     ["ID", "Title", "Status", "Priority", "Owner", "Labels", "Start Date", "Due Date", "Depends On", "Acceptance", "Provider Refs"],

@@ -106,7 +106,11 @@ function issueToTask(issue, repo) {
   const priority = githubPriorityForIssue(issue);
   if (priority) task.priority = priority;
   if (issue.body) task.description = issue.body;
-  if (issue.assignees && issue.assignees.length > 0) task.owner = issue.assignees[0].login;
+  if (issue.assignee) {
+    task.owner = issue.assignee;
+  } else if (issue.assignees && issue.assignees.length > 0) {
+    task.owner = issue.assignees[0];
+  }
   if (issue.milestone) task.milestone = issue.milestone.title;
   if (issue.milestone && issue.milestone.due_on) {
     setTaskDate(task, "due_date", issue.milestone.due_on, {

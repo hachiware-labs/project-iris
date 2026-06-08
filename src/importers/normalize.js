@@ -13,6 +13,52 @@ const STRING_FIELDS = [
   "target_date"
 ];
 
+const OWNER_PREFERRED_FIELDS = [
+  "display_name",
+  "displayName",
+  "name",
+  "full_name",
+  "username",
+  "user_name",
+  "login",
+  "nickname",
+  "email"
+];
+
+function normalizeOwner(value) {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : undefined;
+  }
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const normalized = normalizeOwner(item);
+      if (typeof normalized === "string") {
+        return normalized;
+      }
+    }
+    return undefined;
+  }
+
+  if (typeof value === "object") {
+    for (const key of OWNER_PREFERRED_FIELDS) {
+      const candidate = normalizeOwner(value[key]);
+      if (candidate) {
+        return candidate;
+      }
+    }
+    return undefined;
+  }
+
+  const text = String(value).trim();
+  return text.length > 0 ? text : undefined;
+}
+
 function normalizeStatus(status) {
   if (!status) {
     return "todo";
@@ -123,6 +169,13 @@ function normalizeTask(task) {
     if (Object.prototype.hasOwnProperty.call(normalized, field) && normalized[field] !== undefined) {
       if (field === "status") {
         normalized[field] = normalizeStatus(normalized[field]);
+      } else if (field === "owner") {
+        const normalizedOwner = normalizeOwner(normalized[field]);
+        if (normalizedOwner) {
+          normalized[field] = normalizedOwner;
+        } else {
+          delete normalized[field];
+        }
       } else {
         normalized[field] = String(normalized[field]).trim();
         if (normalized[field] === "") {

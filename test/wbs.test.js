@@ -8,11 +8,21 @@ const readXlsxFile = require("read-excel-file/node");
 const { main, parseOutputDirArgs, parseReadArgs } = require("../src/cli");
 const { tasksToRows } = require("../src/exporters/excel");
 const { rowsToTasks } = require("../src/importers/excel");
-const { issueToTask: githubIssueToTask } = require("../src/importers/github");
-const { issueToTask: gitlabIssueToTask } = require("../src/importers/gitlab");
+const { fetchGitHubIssues, issueToTask: githubIssueToTask } = require("../src/importers/github");
+const {
+  enrichGitLabIssues,
+  fetchGitLabIssueLinks,
+  issueToTask: gitlabIssueToTask,
+  parseGitLabImportArgs
+} = require("../src/importers/gitlab");
 const { applySync, supportedFieldDiffs } = require("../src/sync/apply");
 const { previewTaskDiffs } = require("../src/sync/preview");
 const { writeXlsx } = require("../src/xlsx");
+const {
+  makeReportData,
+  parseArgs: parseDailyReportArgs,
+  renderHtml: renderDailyReportHtml
+} = require("../scripts/generate-daily-report");
 const packageJson = require("../package.json");
 const {
   filterTasks,
@@ -314,6 +324,50 @@ test("issueToTask maps GitHub issues to WBS tasks", () => {
   assert.equal(task.provider_refs[0].provider, "github");
 });
 
+test("fetchGitHubIssues keeps stable pagination when pages contain pull requests", async () => {
+  const originalFetch = global.fetch;
+  const requests = [];
+  const prItems = Array.from({ length: 98 }, (_, index) => ({
+    number: 1000 + index,
+    pull_request: {}
+  }));
+  const issue = (number) => ({
+    number,
+    title: `Issue ${number}`,
+    state: "open",
+    labels: [],
+    html_url: `https://github.com/owner/repo/issues/${number}`,
+    created_at: "2026-05-25T00:00:00Z",
+    updated_at: "2026-05-25T01:00:00Z"
+  });
+
+  global.fetch = async (url) => {
+    requests.push(url);
+    const page = new URL(url).searchParams.get("page");
+    return {
+      ok: true,
+      json: async () => page === "1"
+        ? [issue(1), issue(2), ...prItems]
+        : [issue(3), issue(4)],
+      text: async () => ""
+    };
+  };
+
+  try {
+    const issues = await fetchGitHubIssues({
+      repo: "owner/repo",
+      state: "all",
+      limit: 4
+    });
+
+    assert.deepEqual(issues.map((item) => item.number), [1, 2, 3, 4]);
+    assert.equal(new URL(requests[0]).searchParams.get("per_page"), "100");
+    assert.equal(new URL(requests[1]).searchParams.get("per_page"), "100");
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test("issueToTask maps GitLab issues to WBS tasks", () => {
   const task = gitlabIssueToTask({
     id: 999,
@@ -342,6 +396,183 @@ test("issueToTask maps GitLab issues to WBS tasks", () => {
   assert.equal(task.start_date, "2026-06-01");
   assert.equal(task.due_date, "2026-06-20");
   assert.equal(task.provider_refs[0].provider, "gitlab");
+});
+
+test("parseGitLabImportArgs supports optional enrichment flags", () => {
+  assert.deepEqual(parseGitLabImportArgs([
+    "--project", "group/project",
+    "--include-links",
+    "--include-merge-requests"
+  ]), {
+    host: "https://gitlab.com",
+    outputDir: process.cwd(),
+    state: "opened",
+    limit: 100,
+    project: "group/project",
+    includeLinks: true,
+    includeMergeRequests: true
+  });
+
+  const enriched = parseGitLabImportArgs(["--project", "group/project", "--enrich"]);
+  assert.equal(enriched.includeLinks, true);
+  assert.equal(enriched.includeMergeRequests, true);
+});
+
+test("issueToTask maps GitLab blocking links and merge requests into provider refs", () => {
+  const task = gitlabIssueToTask({
+    id: 1001,
+    iid: 36,
+    title: "GitLab dependency mapping",
+    description: "Map GitLab issue relationships",
+    state: "opened",
+    labels: ["planning"],
+    assignees: [],
+    blocking_issues_count: 1,
+    web_url: "https://gitlab.com/group/project/-/issues/36",
+    created_at: "2026-05-25T00:00:00Z",
+    updated_at: "2026-05-25T01:00:00Z",
+    _project_iris_links: [
+      {
+        iid: 12,
+        id: 5012,
+        project_id: 50,
+        title: "Required design decision",
+        state: "opened",
+        web_url: "https://gitlab.com/group/project/-/issues/12",
+        link_type: "is_blocked_by",
+        issue_link_id: 9001
+      },
+      {
+        iid: 40,
+        id: 5040,
+        project_id: 50,
+        title: "Downstream task",
+        state: "opened",
+        web_url: "https://gitlab.com/group/project/-/issues/40",
+        link_type: "blocks",
+        issue_link_id: 9002
+      }
+    ],
+    _project_iris_related_merge_requests: [{
+      id: 700,
+      iid: 7,
+      project_id: 50,
+      title: "Implement dependency mapping",
+      state: "opened",
+      reference: "!7",
+      source_branch: "dependency-mapping",
+      target_branch: "main",
+      web_url: "https://gitlab.com/group/project/-/merge_requests/7"
+    }],
+    _project_iris_closed_by_merge_requests: [{
+      id: 701,
+      iid: 8,
+      project_id: 50,
+      title: "Close dependency mapping",
+      state: "merged",
+      reference: "!8",
+      web_url: "https://gitlab.com/group/project/-/merge_requests/8",
+      merged_at: "2026-05-26T00:00:00Z"
+    }]
+  }, {
+    host: "https://gitlab.com",
+    project: "group/project",
+    availableTaskIds: new Set(["GL-12", "GL-36", "GL-40"])
+  });
+
+  assert.deepEqual(task.depends_on, ["GL-12"]);
+  assert.equal(task.provider_refs[0].blocking_issues_count, 1);
+  assert.deepEqual(task.provider_refs[0].issue_links.map((link) => [link.type, link.issue_id]), [
+    ["is_blocked_by", 12],
+    ["blocks", 40]
+  ]);
+  assert.deepEqual(task.provider_refs[0].related_merge_requests.map((mr) => mr.reference), ["!7"]);
+  assert.deepEqual(task.provider_refs[0].closed_by_merge_requests.map((mr) => mr.reference), ["!8"]);
+});
+
+test("issueToTask omits GitLab dependency links outside the available WBS task set", () => {
+  const task = gitlabIssueToTask({
+    id: 1002,
+    iid: 37,
+    title: "Out of scope dependency",
+    state: "opened",
+    labels: [],
+    web_url: "https://gitlab.com/group/project/-/issues/37",
+    created_at: "2026-05-25T00:00:00Z",
+    updated_at: "2026-05-25T01:00:00Z",
+    _project_iris_links: [{
+      iid: 99,
+      id: 5099,
+      project_id: 50,
+      title: "Not imported",
+      state: "opened",
+      web_url: "https://gitlab.com/group/project/-/issues/99",
+      link_type: "is_blocked_by"
+    }]
+  }, {
+    host: "https://gitlab.com",
+    project: "group/project",
+    availableTaskIds: new Set(["GL-37"])
+  });
+
+  assert.deepEqual(task.depends_on, []);
+  assert.equal(task.provider_refs[0].issue_links[0].issue_id, 99);
+});
+
+test("GitLab optional issue link enrichment tolerates authorization failures", async () => {
+  await withMockedProvider({}, async () => ({
+    ok: false,
+    status: 401,
+    text: async () => "Unauthorized"
+  }), async () => {
+    const links = await fetchGitLabIssueLinks({
+      host: "https://gitlab.com",
+      project: "group/project",
+      issueIid: 1
+    });
+
+    assert.deepEqual(links, []);
+  });
+});
+
+test("enrichGitLabIssues fetches optional links and merge requests", async () => {
+  const requests = [];
+  await withMockedProvider({ GITLAB_TOKEN: "test-token" }, async (url, options = {}) => {
+    requests.push({ url, options });
+    if (url.endsWith("/links")) {
+      return {
+        ok: true,
+        json: async () => [{ iid: 2, link_type: "is_blocked_by" }],
+        text: async () => ""
+      };
+    }
+    if (url.endsWith("/related_merge_requests")) {
+      return {
+        ok: true,
+        json: async () => [{ iid: 3, reference: "!3" }],
+        text: async () => ""
+      };
+    }
+    return {
+      ok: true,
+      json: async () => [{ iid: 4, reference: "!4" }],
+      text: async () => ""
+    };
+  }, async () => {
+    const issues = await enrichGitLabIssues([{ iid: 1, title: "Issue" }], {
+      host: "https://gitlab.com",
+      project: "group/project",
+      token: "test-token",
+      includeLinks: true,
+      includeMergeRequests: true
+    });
+
+    assert.deepEqual(issues[0]._project_iris_links, [{ iid: 2, link_type: "is_blocked_by" }]);
+    assert.deepEqual(issues[0]._project_iris_related_merge_requests, [{ iid: 3, reference: "!3" }]);
+    assert.deepEqual(issues[0]._project_iris_closed_by_merge_requests, [{ iid: 4, reference: "!4" }]);
+    assert.equal(requests.length, 3);
+    assert.equal(requests[0].options.headers["PRIVATE-TOKEN"], "test-token");
+  });
 });
 
 test("issueToTask normalizes GitHub owner display names", () => {
@@ -672,4 +903,231 @@ test("main supports status with output-dir", async () => {
   assert.match(status.output.join("\n"), /Tasks: 2/);
   assert.match(status.output.join("\n"), /todo=1/);
   assert.match(status.output.join("\n"), /done=1/);
+});
+
+test("daily report supports label-scoped open issue burndown", () => {
+  const options = parseDailyReportArgs([
+    "--date", "2026-06-08",
+    "--repo", "owner/repo",
+    "--label", "release"
+  ]);
+  const report = makeReportData({
+    version: 1,
+    tasks: [
+      {
+        id: "GH-1",
+        title: "Release blocker",
+        status: "todo",
+        labels: ["release"],
+        provider_refs: [{
+          provider: "github",
+          repo: "owner/repo",
+          id: 1,
+          url: "https://github.com/owner/repo/issues/1",
+          updated_at: "2026-06-07T00:00:00Z"
+        }]
+      },
+      {
+        id: "GH-2",
+        title: "Closed release task",
+        status: "done",
+        labels: ["release"],
+        provider_refs: [{
+          provider: "github",
+          repo: "owner/repo",
+          id: 2,
+          url: "https://github.com/owner/repo/issues/2",
+          closed_at: "2026-06-07T00:00:00Z"
+        }]
+      },
+      {
+        id: "GH-3",
+        title: "Other task",
+        status: "todo",
+        labels: ["docs"],
+        provider_refs: [{
+          provider: "github",
+          repo: "owner/repo",
+          id: 3,
+          updated_at: "2026-06-07T00:00:00Z"
+        }]
+      }
+    ]
+  }, options);
+
+  assert.deepEqual(report.scope.labels, ["release"]);
+  assert.equal(report.scope.source_task_count, 3);
+  assert.equal(report.source.task_count, 2);
+  assert.equal(report.source.open_count, 1);
+  assert.deepEqual(report.open_issue_burndown.points, [{
+    date: "2026-06-08",
+    open_count: 1
+  }]);
+
+  const html = renderDailyReportHtml(report);
+  assert.match(html, /イシュー概況/);
+  assert.match(html, /未完了イシュー バーンダウン/);
+  assert.match(html, /主な進捗（根拠つき）/);
+  assert.match(html, /ラベル: release/);
+});
+
+test("daily report treats blocked and dependency target issues as important", () => {
+  const options = parseDailyReportArgs([
+    "--date", "2026-06-08",
+    "--repo", "owner/repo"
+  ]);
+  const report = makeReportData({
+    version: 1,
+    tasks: [
+      {
+        id: "GH-1",
+        title: "Blocked foundation issue",
+        status: "blocked",
+        labels: [],
+        depends_on: [],
+        provider_refs: [{
+          provider: "github",
+          repo: "owner/repo",
+          id: 1,
+          url: "https://github.com/owner/repo/issues/1",
+          updated_at: "2026-06-07T00:00:00Z"
+        }]
+      },
+      {
+        id: "GH-2",
+        title: "Dependency target",
+        status: "todo",
+        labels: [],
+        depends_on: [],
+        provider_refs: [{
+          provider: "github",
+          repo: "owner/repo",
+          id: 2,
+          url: "https://github.com/owner/repo/issues/2",
+          updated_at: "2026-06-06T00:00:00Z"
+        }]
+      },
+      {
+        id: "GH-3",
+        title: "Depends on target",
+        status: "todo",
+        labels: [],
+        depends_on: ["GH-2"],
+        provider_refs: [{
+          provider: "github",
+          repo: "owner/repo",
+          id: 3,
+          url: "https://github.com/owner/repo/issues/3",
+          updated_at: "2026-06-08T00:00:00Z"
+        }]
+      },
+      {
+        id: "GL-4",
+        title: "Blocks downstream GitLab work",
+        status: "todo",
+        labels: [],
+        depends_on: [],
+        provider_refs: [{
+          provider: "gitlab",
+          project: "group/project",
+          id: 4,
+          url: "https://gitlab.com/group/project/-/issues/4",
+          updated_at: "2026-06-08T00:00:00Z",
+          blocking_issues_count: 2,
+          issue_links: [{
+            type: "blocks",
+            issue_id: 5,
+            title: "Downstream issue"
+          }]
+        }]
+      }
+    ]
+  }, options);
+
+  assert.deepEqual(report.focus_items.map((item) => item.id), ["GL-4", "GH-2", "GH-1"]);
+  assert.equal(report.focus_items[0].category, "重要イシュー");
+  assert.match(report.focus_items[0].reason, /止めている可能性/);
+  assert.equal(report.focus_items[1].category, "重要イシュー");
+  assert.match(report.focus_items[1].reason, /依存先/);
+  assert.equal(report.focus_items[2].category, "重要イシュー");
+  assert.match(report.focus_items[2].reason, /blocked/);
+  assert.deepEqual(report.project_issue_attention.map((item) => item.id), ["GL-4", "GH-2", "GH-1"]);
+
+  const html = renderDailyReportHtml(report);
+  assert.match(html, /重要イシュー/);
+  assert.match(html, /注目すべきイシュー/);
+  assert.match(html, /依存先/);
+  assert.match(html, /止めている可能性/);
+});
+
+test("daily report can use LLM issue insights for content-based judgement", () => {
+  const options = parseDailyReportArgs([
+    "--date", "2026-06-08",
+    "--repo", "owner/repo"
+  ]);
+  options.insights = {
+    analysis_mode: "llm_assisted",
+    issue_insights: {
+      "GH-1": {
+        priority: "high",
+        category: "リリース運用",
+        reason: "Issue 本文から、複数リリース時の投稿生成と security release formatting が壊れやすい運用課題と判断できる。",
+        attention_reason: "release post automation の失敗は公開作業の手戻りにつながるため、stale 日数より内容の重要度で注目する。",
+        suggested_action: "release automation の owner を決め、再現条件と完了条件を Issue に追記する。",
+        support_comment: "release に詳しい人へ期待動作を確認してもらうと進めやすいです。",
+        evidence_summary: "複数 release の PR 統合、static build matrix、security release post formatting が論点。"
+      }
+    },
+    focus_message: "release automation は判断が先に必要なので、やりにくい点を早めに確認する。",
+    progress_message: "薄くですが、利用者に効く改善が着実に進んでいます。"
+  };
+  const report = makeReportData({
+    version: 1,
+    tasks: [
+      {
+        id: "GH-1",
+        title: "Improvements for Release Blog Posts",
+        status: "todo",
+        labels: [],
+        provider_refs: [{
+          provider: "github",
+          repo: "owner/repo",
+          id: 1,
+          url: "https://github.com/owner/repo/issues/1",
+          updated_at: "2026-06-07T00:00:00Z"
+        }],
+        description: "Multiple releases are not merged into a single PR. Static Builds are slow. Security Release Posts are not properly formatted."
+      },
+      {
+        id: "GH-2",
+        title: "Older but simpler stale task",
+        status: "todo",
+        labels: [],
+        provider_refs: [{
+          provider: "github",
+          repo: "owner/repo",
+          id: 2,
+          url: "https://github.com/owner/repo/issues/2",
+          updated_at: "2026-01-01T00:00:00Z"
+        }],
+        description: "Small copy tweak."
+      }
+    ]
+  }, options);
+
+  assert.equal(report.analysis.mode, "llm_assisted");
+  assert.equal(report.focus_items[0].id, "GH-1");
+  assert.equal(report.focus_items[0].category, "リリース運用");
+  assert.match(report.focus_items[0].reason, /security release/);
+  assert.match(report.focus_items[0].support_comment, /release に詳しい人/);
+  assert.match(report.focus_message, /やりにくい点/);
+  assert.match(report.progress_message, /着実に進んでいます/);
+  assert.deepEqual(report.project_issue_attention.map((item) => item.id), ["GH-1", "GH-2"]);
+  assert.match(report.project_issue_attention[0].attention, /公開作業/);
+
+  const html = renderDailyReportHtml(report);
+  assert.match(html, /リリース運用/);
+  assert.match(html, /複数 release の PR 統合/);
+  assert.match(html, /薄くですが/);
+  assert.match(html, /release に詳しい人/);
 });

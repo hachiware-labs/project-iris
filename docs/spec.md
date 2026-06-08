@@ -3,22 +3,26 @@
 要件とは、Project Iris が満たすべき観測可能な振る舞いを、レビュー者が確認できる粒度で定義するものである。各要件は Given/When/Done で正常系を示し、エラー分岐は ERR/MSG ID で管理する。I/F 詳細や外部 API の細部はここでは定義しない。
 
 # 要件一覧（Requirements）
-| ID | 要件（固定書式・正常系のみ） | 関連UC-ID |
-|---|---|---|
-| REQ-0001 | 管理領域を初期化したら、Project Iris が読むローカル scaffold を作成する。 | UC-1 |
-| REQ-0002 | GitHub Issues を取り込んだら、Issue を provider_refs つき Task として WBS に追加または更新する。 | UC-2 |
-| REQ-0003 | Excel WBS を取り込んだら、Excel 行を provider_refs つき Task として WBS に追加または更新する。 | UC-2 |
-| REQ-0004 | 現在状態を表示したら、WBS の status/owner/blocked/high priority open を集計して表示する。 | UC-3 |
-| REQ-0005 | プロジェクトを分析したら、支援判断に必要な finding をルールベースで出力する。 | UC-4 |
-| REQ-0006 | snapshot を取得したら、現在状態の履歴を日付つきで保存する。 | UC-5 |
-| REQ-0007 | burndown を表示したら、snapshot 履歴から残作業推移と見通しを表示する。 | UC-5 |
-| REQ-0008 | report を生成したら、進捗見通し、リスク、支援候補、よい進捗シグナル、次アクションを Markdown として出力する。 | UC-6 |
-| REQ-0009 | 人に関する分析を出力したら、個人評価ではなく支援判断として表現する。 | UC-4, UC-6 |
-| REQ-0010 | focus を表示したら、プロジェクトが今見るべき焦点を優先順で出力する。 | UC-7 |
-| REQ-0011 | WBS を Excel に export したら、provider_refs を保持したローカル WBS ビューを作成する。 | UC-8 |
-| REQ-0012 | sync preview を実行したら、Excel/WBS/provider 間の差分とリスクを表示する。 | UC-8, UC-9 |
-| REQ-0013 | sync apply を実行したら、承認済み差分だけを provider に反映する。 | UC-9 |
-| REQ-0014 | GitLab Issues を取り込んだら、Issue を provider_refs つき Task として WBS に追加または更新する。 | UC-2 |
+| ID | 状態 | 要件（固定書式・正常系のみ） | 関連UC-ID |
+|---|---|---|---|
+| REQ-0001 | Implemented | 管理領域を初期化したら、Project Iris が読むローカル scaffold を作成する。 | UC-1 |
+| REQ-0002 | Implemented | GitHub Issues を取り込んだら、Issue を provider_refs つき Task として WBS に追加または更新する。 | UC-2 |
+| REQ-0003 | Implemented | Excel WBS を取り込んだら、Excel 行を provider_refs つき Task として WBS に追加または更新する。 | UC-2 |
+| REQ-0004 | Implemented | 現在状態を表示したら、WBS の status/owner/blocked/high priority open を集計して表示する。 | UC-3 |
+| REQ-0005 | Planned | プロジェクトを分析したら、Issue 本文を LLM が解釈し、blocked や他 Issue の依存先を含む、支援判断に必要な重要イシューやプロジェクト課題の finding を根拠つきで出力する。 | UC-4 |
+| REQ-0006 | Planned | snapshot を取得したら、現在状態の履歴を日付つきで保存する。 | UC-5 |
+| REQ-0007 | Planned | burndown を表示したら、snapshot 履歴から残作業推移と見通しを表示する。 | UC-5 |
+| REQ-0008 | Planned | report を生成したら、進捗見通し、プロジェクト課題、よい進捗シグナル、次アクションを Markdown として出力する。 | UC-6 |
+| REQ-0009 | Planned | 人と課題に関する分析を出力したら、活躍は人の貢献として示し、問題は Issue やプロジェクト課題として表現する。 | UC-4, UC-6 |
+| REQ-0010 | Planned | focus を表示したら、プロジェクトが今見るべき焦点を優先順で出力する。 | UC-7 |
+| REQ-0011 | Implemented | WBS を Excel に export したら、provider_refs を保持したローカル WBS ビューを作成する。 | UC-8 |
+| REQ-0012 | Implemented | sync preview を実行したら、PM が確認すべき Excel/WBS/provider 間の差分とリスクを表示する。 | UC-8, UC-9 |
+| REQ-0013 | Implemented | sync apply を実行したら、保存済み preview のうち provider が対応する差分を provider に反映する。 | UC-9 |
+| REQ-0014 | Implemented | GitLab Issues を取り込んだら、Issue を provider_refs つき Task として WBS に追加または更新する。 | UC-2 |
+| REQ-0015 | Implemented | WBS を list したら、条件に合う Task の概要を表示する。 | UC-3 |
+| REQ-0016 | Implemented | Task を show したら、指定 Task の詳細を表示する。 | UC-3 |
+| REQ-0017 | Implemented | WBS を validate したら、schema と依存関係の検証結果を表示する。 | UC-1 |
+| REQ-0018 | Planned | ユーザーの対話または Codex オートメーションから Project Iris Skill が日次レポートを生成したら、対象 scope、未完了イシュー バーンダウン、PM が毎日読む HTML と根拠 JSON を保存する。 | UC-10 |
 
 ### [PIRIS-0001] 管理領域を初期化したら、Project Iris が読むローカル scaffold を作成する。
 Given：ユーザーが Project Iris を使いたい対象ディレクトリを持っている。
@@ -48,6 +52,8 @@ Done：GitHub Issue が Task に変換され、`provider_refs` に provider、re
 Given：`.planwise/wbs.yaml` が存在し、対象 GitLab project が指定されている。
 When：ユーザーが `iris import gitlab --project group/project` を実行する。
 Done：GitLab Issue が Task に変換され、`provider_refs` に provider、host、project、issue iid、URL、timestamps を保持して WBS に保存される。Issue、milestone、iteration の start/due date が存在する場合は Task の日付として保存される。
+
+任意拡張：ユーザーが `--include-links` または `--enrich` を指定した場合、GitLab Issue link を取得し、`is_blocked_by` は linked issue が WBS に存在する場合だけ `depends_on` に反映する。linked issue が取得範囲外の場合は WBS 検証を壊さないよう `provider_refs.issue_links` に根拠だけ保持する。ユーザーが `--include-merge-requests` または `--enrich` を指定した場合、related / closed-by merge request を `provider_refs` に保持する。任意拡張 endpoint が権限不足で取得できない場合、GitLab Issue 本体の import は継続する。
 
 #### エラー分岐（REQ-0014の枝番）
 | ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
@@ -79,10 +85,10 @@ Done：総タスク数、status 別件数、owner 別件数、blocked tasks、ur
 | ERR-PIRIS-0008 | `.planwise/wbs.yaml` が存在しない | `iris init` を実行する | MSG-PIRIS-0008 |
 | ERR-PIRIS-0009 | WBS が schema 検証に失敗する | `iris validate` の結果に従って修正する | MSG-PIRIS-0009 |
 
-### [PIRIS-0005] プロジェクトを分析したら、支援判断に必要な finding をルールベースで出力する。
+### [PIRIS-0005] Planned: プロジェクトを分析したら、Issue 本文を LLM が解釈し、blocked や他 Issue の依存先を含む、支援判断に必要な重要イシューやプロジェクト課題の finding を根拠つきで出力する。
 Given：WBS に tasks と必要に応じて provider_refs が存在する。
 When：ユーザーが `iris analyze` を実行する。
-Done：blocked、依存ボトルネック、owner なし、高優先度未完了、acceptance 不足、stale、provider 差分が finding として表示される。
+Done：LLM が Issue title/body/labels/provider_refs を読み、何の課題か、なぜ PM が見るべきか、次に何を判断すべきかを finding として表示する。blocked として扱われている Issue、他 Issue の依存先になっている Issue、依存ボトルネック、owner なし、高優先度未完了、acceptance 不足、stale、provider 差分は deterministic evidence として LLM 判断を補助する。出力は個人の問題ではなく重要イシューやプロジェクト課題として表示される。
 
 #### エラー分岐（REQ-0005の枝番）
 | ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
@@ -90,7 +96,7 @@ Done：blocked、依存ボトルネック、owner なし、高優先度未完了
 | ERR-PIRIS-0010 | 分析に必要なデータが不足している | import または WBS 編集でデータを補う | MSG-PIRIS-0010 |
 | ERR-PIRIS-0011 | 日付や provider timestamp が不足し stale 判定できない | stale 判定なしの finding として読む | MSG-PIRIS-0011 |
 
-### [PIRIS-0006] snapshot を取得したら、現在状態の履歴を日付つきで保存する。
+### [PIRIS-0006] Planned: snapshot を取得したら、現在状態の履歴を日付つきで保存する。
 Given：WBS が存在し、tasks が検証可能である。
 When：ユーザーが `iris snapshot` を実行する。
 Done：`.planwise/history/snapshots/YYYY-MM-DD.json` に total、remaining、done、by_status、by_milestone が保存される。
@@ -101,7 +107,7 @@ Done：`.planwise/history/snapshots/YYYY-MM-DD.json` に total、remaining、don
 | ERR-PIRIS-0012 | WBS が存在しない、または検証に失敗する | WBS を作成または修正する | MSG-PIRIS-0012 |
 | ERR-PIRIS-0013 | 同日の snapshot が既に存在する | 上書き可否を確認して再実行する | MSG-PIRIS-0013 |
 
-### [PIRIS-0007] burndown を表示したら、snapshot 履歴から残作業推移と見通しを表示する。
+### [PIRIS-0007] Planned: burndown を表示したら、snapshot 履歴から残作業推移と見通しを表示する。
 Given：2件以上の snapshot が存在する。
 When：ユーザーが `iris burndown` を実行する。
 Done：日付別 remaining、burn rate、必要 burn rate、delivery outlook が表示される。
@@ -112,10 +118,12 @@ Done：日付別 remaining、burn rate、必要 burn rate、delivery outlook が
 | ERR-PIRIS-0014 | snapshot が不足している | `iris snapshot` を継続実行する | MSG-PIRIS-0014 |
 | ERR-PIRIS-0015 | milestone 指定に該当する履歴がない | milestone 名を確認するか scope を広げる | MSG-PIRIS-0015 |
 
-### [PIRIS-0008] report を生成したら、進捗見通し、リスク、支援候補、よい進捗シグナル、次アクションを Markdown として出力する。
+### [PIRIS-0008] Planned: report を生成したら、進捗見通し、プロジェクト課題、よい進捗シグナル、次アクションを Markdown として出力する。
 Given：status、analyze、必要に応じて burndown の材料がある。
 When：ユーザーが `iris report --format markdown` を実行する。
-Done：Executive Summary、Delivery Outlook、Key Risks、People Attention、Positive Signals、Suggested Actions を含む Markdown が出力される。
+Done：Executive Summary、Delivery Outlook、注目すべきイシュー、前進シグナル、Suggested Actions を含む Markdown が出力される。前進シグナルは人の貢献として表現し、注目すべきイシューは blocked、他 Issue の依存先、長く更新がない Issue、判断待ち、未確定事項などの課題として表現する。
+
+制約：LLM を使って自然文を生成する場合も、finding、snapshot、provider_refs、差分などの根拠データを入力にし、根拠のない推測で人や課題を断定しない。
 
 #### エラー分岐（REQ-0008の枝番）
 | ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
@@ -123,21 +131,34 @@ Done：Executive Summary、Delivery Outlook、Key Risks、People Attention、Pos
 | ERR-PIRIS-0016 | report に必要な analysis が生成できない | WBS と provider_refs を確認する | MSG-PIRIS-0016 |
 | ERR-PIRIS-0017 | burndown 履歴が不足して delivery outlook が出せない | 履歴不足として report を読むか snapshot を蓄積する | MSG-PIRIS-0017 |
 
-### [PIRIS-0009] 人に関する分析を出力したら、個人評価ではなく支援判断として表現する。
+### [PIRIS-0018] Planned: ユーザーの対話または Codex オートメーションから Project Iris Skill が日次レポートを生成したら、対象 scope、未完了イシュー バーンダウン、PM が毎日読む HTML と根拠 JSON を保存する。
+Given：WBS、provider_refs、必要に応じて snapshot、analysis、sync diff が存在する。
+When：ユーザーが「今日のプロジェクト状況をレポートして」「毎朝9時に日次レポートを作って」「release ラベルだけで見て」のように依頼するか、Codex オートメーションが Project Iris Skill を実行する。Skill は必要に応じて内部コマンド `iris report daily --format html` を呼び出す。
+Done：`.planwise/reports/daily/YYYY-MM-DD.html`、根拠 JSON、必要に応じて LLM Insight JSON が保存され、対象 scope、イシュー概況、未完了イシュー バーンダウン、今日の焦点、主な進捗、注目すべきイシュー、日程・見通し、Suggested Actions が表示される。イシュー数とバーンダウンには見出しを置く。今日の焦点では LLM が Issue 本文を読んで判断した重要度を優先し、blocked として扱われている Issue と他 Issue の依存先になっている Issue も重要イシューとして優先する。今日の焦点には、やりにくい点がないか、どの人や領域に確認をもらうと進みやすいかを支援コメントとして添える。注目すべきイシューは未完了全件ではなく、LLM が内容上支援すべきと判断した Issue、blocked、他 Issue の依存先、長く更新がない Issue に絞る。主な進捗は Issue の大量 close、大きい・難しい Issue の完了、PR/MR merge などを前進シグナルとして扱い、人の貢献を示す。主な進捗には直接的すぎない控えめな肯定メッセージを添える。問題は個人ではなく Issue やプロジェクト課題として表現する。label scope が指定された場合は対象 label の Task だけを母集団にする。
+
+制約：HTML はユーザーが明示的に共有する成果物であり、自動公開しない。LLM 判断は根拠 JSON、snapshot、provider_refs、sync diff、Issue title/body/labels などの事実データに基づいて生成し、根拠のない推測で人や課題を断定しない。
+
+#### エラー分岐（REQ-0018の枝番）
+| ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
+|---|---|---|---|
+| ERR-PIRIS-0032 | 日次 HTML レポートに必要な根拠データが不足している | WBS/provider_refs/snapshot を確認する | MSG-PIRIS-0032 |
+| ERR-PIRIS-0033 | レポート保存先に書き込めない | `.planwise/reports/daily` の path と権限を確認する | MSG-PIRIS-0033 |
+
+### [PIRIS-0009] Planned: 人と課題に関する分析を出力したら、活躍は人の貢献として示し、問題は Issue やプロジェクト課題として表現する。
 Given：Task に owner、assignee、provider_refs、finding が存在する。
-When：Project Iris が people attention または support needed を出力する。
-Done：出力は「誰を助けるとプロジェクトが前に進むか」「どこに負荷・判断・詰まりがあるか」を示し、個人の能力評価・順位付け・責任追及表現を含まない。
+When：Project Iris が contribution signals または project issue attention を出力する。
+Done：出力は「誰がプロジェクトを前に進めたか」を貢献として示し、「どの Issue、依存関係、判断待ち、未確定事項に支援が必要か」をプロジェクト課題として示す。個人の能力評価・順位付け・責任追及表現を含まない。
 
 #### エラー分岐（REQ-0009の枝番）
 | ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
 |---|---|---|---|
-| ERR-PIRIS-0018 | 個人に関する根拠データが不足している | person finding をデータ不足として扱う | MSG-PIRIS-0018 |
-| ERR-PIRIS-0019 | 出力が評価・ランキングに見える | 表現を support/attention/recommendation に修正する | MSG-PIRIS-0019 |
+| ERR-PIRIS-0018 | 人の貢献または課題に関する根拠データが不足している | finding をデータ不足として扱う | MSG-PIRIS-0018 |
+| ERR-PIRIS-0019 | 出力が評価・ランキング・責任追及に見える | 活躍は貢献、問題は Issue や課題として表現を修正する | MSG-PIRIS-0019 |
 
-### [PIRIS-0010] focus を表示したら、プロジェクトが今見るべき焦点を優先順で出力する。
+### [PIRIS-0010] Planned: focus を表示したら、プロジェクトが今見るべき焦点を優先順で出力する。
 Given：WBS、status、analysis、必要に応じて snapshot/burndown の材料がある。
 When：ユーザーが `iris focus` を実行する。
-Done：最重要リスク、支援が必要な人または領域、次アクション、Positive Signals が根拠つきで優先順に表示される。
+Done：最重要リスク、支援すべき Issue やプロジェクト課題、次アクション、前進シグナルが根拠つきで優先順に表示される。
 
 #### エラー分岐（REQ-0010の枝番）
 | ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
@@ -156,10 +177,10 @@ Done：Task の主要項目と provider_refs を含む Excel WBS が指定パス
 | ERR-PIRIS-0022 | WBS が存在しない、または検証に失敗する | `iris init` または `iris validate` を実行する | MSG-PIRIS-0022 |
 | ERR-PIRIS-0023 | 出力先 Excel を安全に書き込めない | path、権限、既存ファイルを確認する | MSG-PIRIS-0023 |
 
-### [PIRIS-0012] sync preview を実行したら、Excel/WBS/provider 間の差分とリスクを表示する。
-Given：provider_refs つき WBS と、対象 provider または Excel WBS が存在する。
+### [PIRIS-0012] sync preview を実行したら、PM が確認すべき Excel/WBS/provider 間の差分とリスクを表示する。
+Given：provider_refs つき WBS と、PM が日程・状態・優先度などを確認または編集した Excel WBS、もしくは対象 provider が存在する。
 When：ユーザーが `iris sync preview` を実行する。
-Done：追加、更新、削除、競合、破壊的変更候補が SyncDiff として表示され、apply 前に確認できる。
+Done：追加、更新、削除、競合、破壊的変更候補が SyncDiff として表示され、日程変更、状態変更、優先度変更などを apply 前に確認できる。
 
 #### エラー分岐（REQ-0012の枝番）
 | ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
@@ -167,12 +188,12 @@ Done：追加、更新、削除、競合、破壊的変更候補が SyncDiff と
 | ERR-PIRIS-0024 | provider_refs が不足して対応関係を判断できない | import/export をやり直すか対応 ID を補う | MSG-PIRIS-0024 |
 | ERR-PIRIS-0025 | remote provider と local Excel の両方が変更され競合している | どちらを採用するか明示する | MSG-PIRIS-0025 |
 
-### [PIRIS-0013] sync apply を実行したら、承認済み差分だけを provider に反映する。
-Given：sync preview の結果があり、ユーザーが反映対象の差分を承認している。
+### [PIRIS-0013] sync apply を実行したら、保存済み preview のうち provider が対応する差分を provider に反映する。
+Given：sync preview の結果があり、PM またはプロジェクトリードが preview の内容を確認している。
 When：ユーザーが `iris sync apply` を実行する。
-Done：承認済み差分だけが provider に書き戻され、反映結果が WBS と provider_refs に保存される。
+Done：保存済み preview のうち provider が対応する差分だけが provider に書き戻され、反映結果が WBS と provider_refs に保存される。
 
-制約：GitHub apply は Issue 本体がサポートする title/body/state/labels を対象とする。GitLab apply は title/description/state/labels/due_date を対象とする。start_date は WBS/Excel 側の計画日付として保持し、provider が明示的に対応する連携を追加するまでは書き戻さない。
+制約：GitHub apply は Issue 本体がサポートする title/body/state/labels を対象とする。GitLab apply は title/description/state/labels/due_date を対象とする。priority、owner、start_date は現行 apply の書き戻し対象ではない。start_date は WBS/Excel 側の計画日付として保持し、provider が明示的に対応する連携を追加するまでは書き戻さない。同期は PM の計画調整を支える補助機能であり、Project Iris の主目的はプロジェクト状況の解釈と支援判断である。
 
 #### エラー分岐（REQ-0013の枝番）
 | ERR-ID | 発生条件 | ユーザーアクション | 関連MSG-ID |
@@ -180,6 +201,21 @@ Done：承認済み差分だけが provider に書き戻され、反映結果が
 | ERR-PIRIS-0026 | preview なしに apply しようとしている | `iris sync preview` を先に実行する | MSG-PIRIS-0026 |
 | ERR-PIRIS-0027 | provider への書き込み権限がない | token と権限を確認する | MSG-PIRIS-0027 |
 | ERR-PIRIS-0028 | apply 中に remote が更新され、preview との差分が古くなった | preview を再実行する | MSG-PIRIS-0028 |
+
+### [PIRIS-0015] WBS を list したら、条件に合う Task の概要を表示する。
+Given：`.planwise/wbs.yaml` が存在し、tasks が検証可能である。
+When：ユーザーが `iris list` を実行する。必要に応じて `--status`、`--owner`、`--milestone`、`--label` を指定する。
+Done：条件に合う Task が `id [status priority] @owner title` の概要形式で表示される。
+
+### [PIRIS-0016] Task を show したら、指定 Task の詳細を表示する。
+Given：`.planwise/wbs.yaml` が存在し、指定された task id が存在する。
+When：ユーザーが `iris show <task-id>` を実行する。
+Done：Task の title、status、priority、owner、labels、milestone、dates、depends_on、acceptance、risks、description、provider_refs が存在する範囲で表示される。
+
+### [PIRIS-0017] WBS を validate したら、schema と依存関係の検証結果を表示する。
+Given：`.planwise/wbs.yaml` が存在する。
+When：ユーザーが `iris validate` を実行する。
+Done：WBS が有効な場合は task 件数を含む成功メッセージを表示する。無効な場合は validation error を表示する。
 
 ## メッセージID管理（MSG-xxxx）
 | ID | 文面テンプレ | 出力先 | 発生条件 | 関連REQ/ERR |
@@ -201,8 +237,8 @@ Done：承認済み差分だけが provider に書き戻され、反映結果が
 | MSG-PIRIS-0015 | `No snapshots found for milestone {milestone}.` | stderr | milestone scope 履歴なし | REQ-0007 / ERR-PIRIS-0015 |
 | MSG-PIRIS-0016 | `Report generation failed: analysis data is unavailable.` | stderr | report 材料不足 | REQ-0008 / ERR-PIRIS-0016 |
 | MSG-PIRIS-0017 | `Delivery outlook unavailable: burndown history is insufficient.` | stdout | burndown 履歴不足 | REQ-0008 / ERR-PIRIS-0017 |
-| MSG-PIRIS-0018 | `People attention is limited because person data is missing.` | stdout | 人に関する根拠不足 | REQ-0009 / ERR-PIRIS-0018 |
-| MSG-PIRIS-0019 | `People findings must be phrased as support recommendations.` | stderr | 表現ポリシー違反 | REQ-0009 / ERR-PIRIS-0019 |
+| MSG-PIRIS-0018 | `Attention is limited because contribution or issue evidence is missing.` | stdout | 貢献または課題に関する根拠不足 | REQ-0009 / ERR-PIRIS-0018 |
+| MSG-PIRIS-0019 | `Findings must describe good changes as team members' contributions and problems as project issues.` | stderr | 表現ポリシー違反 | REQ-0009 / ERR-PIRIS-0019 |
 | MSG-PIRIS-0020 | `Focus unavailable: analysis data is missing.` | stderr | focus 材料不足 | REQ-0010 / ERR-PIRIS-0020 |
 | MSG-PIRIS-0021 | `Focus ranking is limited because evidence is insufficient.` | stdout | focus 順位根拠不足 | REQ-0010 / ERR-PIRIS-0021 |
 | MSG-PIRIS-0022 | `Excel export failed: WBS is missing or invalid.` | stderr | export 前提不成立 | REQ-0011 / ERR-PIRIS-0022 |
@@ -215,6 +251,8 @@ Done：承認済み差分だけが provider に書き戻され、反映結果が
 | MSG-PIRIS-0029 | `--project is required` | stderr | GitLab project 指定不足 | REQ-0014 / ERR-PIRIS-0029 |
 | MSG-PIRIS-0030 | `GitLab request failed: {status}` | stderr | GitLab API 取得失敗 | REQ-0014 / ERR-PIRIS-0030 |
 | MSG-PIRIS-0031 | `Cannot save invalid WBS: {errors}` | stderr | GitLab import 後の WBS 不整合 | REQ-0014 / ERR-PIRIS-0031 |
+| MSG-PIRIS-0032 | `Daily report generation skipped: evidence data is insufficient.` | stdout/stderr | 日次レポート根拠不足 | REQ-0018 / ERR-PIRIS-0032 |
+| MSG-PIRIS-0033 | `Daily report write failed: cannot write {path}.` | stderr | 日次レポート保存失敗 | REQ-0018 / ERR-PIRIS-0033 |
 
 ## エラーID管理（ERR-xxxx）
 | ID | 原因 | 検出条件 | ユーザーアクション | 再試行可否 | 関連MSG-ID | 関連REQ |
@@ -236,8 +274,8 @@ Done：承認済み差分だけが provider に書き戻され、反映結果が
 | ERR-PIRIS-0015 | milestone 履歴なし | 指定 milestone の snapshot がない | milestone 名または scope を確認する | 可 | MSG-PIRIS-0015 | REQ-0007 |
 | ERR-PIRIS-0016 | report 材料不足 | analysis が生成できない | WBS/provider_refs を補う | 可 | MSG-PIRIS-0016 | REQ-0008 |
 | ERR-PIRIS-0017 | delivery outlook 不足 | burndown 履歴が足りない | 履歴不足として読むか snapshot を蓄積する | 可 | MSG-PIRIS-0017 | REQ-0008 |
-| ERR-PIRIS-0018 | person data 不足 | owner/assignee/comment/event が不足する | finding の根拠不足を受け入れる | 可 | MSG-PIRIS-0018 | REQ-0009 |
-| ERR-PIRIS-0019 | 表現ポリシー違反 | 個人評価・ランキング表現が出る | support/attention 表現へ修正する | 可 | MSG-PIRIS-0019 | REQ-0009 |
+| ERR-PIRIS-0018 | contribution または issue evidence 不足 | owner/assignee/comment/event/finding evidence が不足する | finding の根拠不足を受け入れる | 可 | MSG-PIRIS-0018 | REQ-0009 |
+| ERR-PIRIS-0019 | 表現ポリシー違反 | 個人評価・ランキング・責任追及表現が出る | 活躍は貢献、問題は Issue や課題として表現を修正する | 可 | MSG-PIRIS-0019 | REQ-0009 |
 | ERR-PIRIS-0020 | focus 材料不足 | analysis がない、または WBS が不足する | import/analyze を実行する | 可 | MSG-PIRIS-0020 | REQ-0010 |
 | ERR-PIRIS-0021 | focus 順位根拠不足 | finding の severity や evidence が不足する | 同順位または根拠不足として読む | 可 | MSG-PIRIS-0021 | REQ-0010 |
 | ERR-PIRIS-0022 | Excel export 前提不成立 | WBS がない、または validate に失敗する | WBS を作成または修正する | 可 | MSG-PIRIS-0022 | REQ-0011 |
@@ -250,3 +288,5 @@ Done：承認済み差分だけが provider に書き戻され、反映結果が
 | ERR-PIRIS-0029 | GitLab project 指定不足 | `--project` がない | project ID または path を指定する | 可 | MSG-PIRIS-0029 | REQ-0014 |
 | ERR-PIRIS-0030 | GitLab API 取得失敗 | API response が success でない | token、host、project 権限を確認する | 可 | MSG-PIRIS-0030 | REQ-0014 |
 | ERR-PIRIS-0031 | GitLab import 後の WBS 不整合 | save 前 validation が失敗する | WBS と provider mapping を修正する | 可 | MSG-PIRIS-0031 | REQ-0014 |
+| ERR-PIRIS-0032 | 日次レポート根拠不足 | WBS/provider_refs/snapshot/analysis/sync diff が不足する | 不足データを作成するか、根拠不足として出力する | 可 | MSG-PIRIS-0032 | REQ-0018 |
+| ERR-PIRIS-0033 | 日次レポート保存失敗 | HTML または根拠 JSON を保存できない | path と権限を確認する | 可 | MSG-PIRIS-0033 | REQ-0018 |

@@ -22,7 +22,7 @@ function printHelp() {
   iris --version
   iris init [--output-dir <dir>] [--force]
   iris import github --repo <owner/name> [--state open|closed|all] [--limit <n>] [--output-dir <dir>]
-  iris import gitlab --project <id-or-path> [--host <url>] [--state opened|closed|all] [--limit <n>] [--output-dir <dir>]
+  iris import gitlab --project <id-or-path> [--host <url>] [--state opened|closed|all] [--limit <n>] [--include-links] [--include-merge-requests] [--output-dir <dir>]
   iris import excel --path <file.xlsx> [--sheet <name-or-number>] [--output-dir <dir>]
   iris export excel --path <file.xlsx> [--output-dir <dir>]
   iris sync preview <github|gitlab|excel> [provider options] [--output-dir <dir>]

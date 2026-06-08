@@ -131,10 +131,11 @@ function issueToTask(issue, repo) {
 
 async function fetchGitHubIssues({ repo, state, limit, token }) {
   const issues = [];
+  const issueNumbers = new Set();
   let page = 1;
+  const perPage = 100;
 
   while (issues.length < limit) {
-    const perPage = Math.min(100, limit - issues.length);
     const url = `https://api.github.com/repos/${repo}/issues?state=${state}&per_page=${perPage}&page=${page}`;
     const headers = {
       "Accept": "application/vnd.github+json",
@@ -152,7 +153,15 @@ async function fetchGitHubIssues({ repo, state, limit, token }) {
 
     const pageItems = await response.json();
     const issueItems = pageItems.filter((item) => !item.pull_request);
-    issues.push(...issueItems);
+    for (const issue of issueItems) {
+      if (!issueNumbers.has(issue.number)) {
+        issueNumbers.add(issue.number);
+        issues.push(issue);
+      }
+      if (issues.length >= limit) {
+        break;
+      }
+    }
 
     if (pageItems.length < perPage) {
       break;
